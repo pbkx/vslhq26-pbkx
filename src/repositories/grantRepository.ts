@@ -73,9 +73,19 @@ class GrantRepository {
   }
 
   private async persist() {
+    const allSearches = [...this.searches.values()];
+    const watchedQueryIds = new Set(
+      this.listWatches().map((watch) => watch.queryId),
+    );
+    const persistedSearches = [...new Map(
+      [
+        ...allSearches.filter((search) => watchedQueryIds.has(search.queryId)),
+        ...allSearches.slice(-10),
+      ].map((search) => [search.queryId, search] as const),
+    ).values()];
     const payload = JSON.stringify(
       {
-        searches: [...this.searches.values()].slice(-10),
+        searches: persistedSearches,
         watches: this.listWatches(),
       },
       null,

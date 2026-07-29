@@ -11,11 +11,33 @@ export type ScoreComponent={score:number;weight:number;weightedContribution:numb
 export type GrantScore={grantId:string;overallScore:number;components:{missionAlignment:ScoreComponent;applicantEligibility:ScoreComponent;geographicFit:ScoreComponent;programSizeFit:ScoreComponent;historicalSimilarity:ScoreComponent;deadlineFeasibility:ScoreComponent};eligibilityStatus:"confirmed"|"likely"|"possible"|"needs-verification"|"likely-ineligible";hardExclusions:string[];warnings:string[];scoredAt:string};
 export type HistoricalEvidence={score:number;confidence:number;reasons:string[];awardCount:number;medianAward?:number;washingtonAwards?:number;source:"irs-990pf"|"usaspending"|"unavailable"};
 export type GrantResult={opportunity:GrantOpportunity;score:GrantScore;chart:{applicationEffort:number;matchScore:number;awardAmount?:number;daysRemaining?:number}};
-export type SearchOutput={queryId:string;searchedAt:string;resultCount:number;sourceCounts:Record<GrantSource,number>;weights:MatchWeights;grants:GrantResult[];warnings:string[];organization:OrganizationProfile;project:ProjectProfile;awardRange?:{minimumAward?:number;maximumAward?:number}};
+export type GrantSearchResultType="current-federal"|"forecasted-federal"|"historical-private-prospect";
+export type SavedGrantSearchCriteria={
+ query?:string;
+ sources:GrantSource[];
+ resultTypes?:GrantSearchResultType[];
+ filters?:{
+  deadlineAfter?:string;
+  deadlineBefore?:string;
+  minimumAward?:number;
+  maximumAward?:number;
+  excludeCostShare?:boolean;
+  onlyOpen?:boolean;
+  minimumScore?:number;
+ };
+ limit:number;
+};
+export type SearchOutput={queryId:string;searchedAt:string;resultCount:number;sourceCounts:Record<GrantSource,number>;weights:MatchWeights;grants:GrantResult[];warnings:string[];organization:OrganizationProfile;project:ProjectProfile;awardRange?:{minimumAward?:number;maximumAward?:number};searchCriteria?:SavedGrantSearchCriteria};
 export type GrantWatchMatchQuality="worth-reviewing"|"strong"|"top-only";
 export type GrantWatchFrequency="as-detected"|"daily"|"weekly";
 export type GrantWatchScope="search"|"selected-grant";
 export type GrantWatchNotificationType="new-match"|"deadline-change"|"opportunity-amended"|"opportunity-closing"|"score-increased";
+export type GrantWatchGrantState={
+ deadline?:string;
+ lastUpdated?:string;
+ score:number;
+ fingerprint:string;
+};
 export type GrantWatch={
  id:string;
  queryId:string;
@@ -33,5 +55,7 @@ export type GrantWatch={
  selectedGrantId?:string;
  lastNotifiedGrantIds?:string[];
  lastNotifiedEventKeys?:string[];
+ lastSeenGrantState?:Record<string,GrantWatchGrantState>;
+ lastCheckedAt?:string;
 };
 export const DEFAULT_WEIGHTS:MatchWeights={missionAlignment:.30,applicantEligibility:.20,geographicFit:.15,programSizeFit:.15,historicalSimilarity:.10,deadlineFeasibility:.10};

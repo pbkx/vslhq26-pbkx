@@ -401,3 +401,81 @@ export function buildWatchAlertEmail(
   });
   return { subject: presentation.subject, plainText, html };
 }
+
+export type GrantWatchDigestItem = {
+  grant: GrantResult;
+  notificationTypes: GrantWatchNotificationType[];
+};
+
+export function buildWatchDigestEmail(
+  watch: GrantWatch,
+  items: GrantWatchDigestItem[],
+) {
+  const frequency = WATCH_FREQUENCY[watch.frequency];
+  const copilotUrl = safeCopilotUrl(watch);
+  const updateCount = items.reduce(
+    (total, item) => total + item.notificationTypes.length,
+    0,
+  );
+  const subject = `${items.length} GrantPilot update${items.length === 1 ? "" : "s"} · ${frequency.label}`;
+  const plainText = [
+    `${frequency.label}: ${updateCount} update${updateCount === 1 ? "" : "s"} across ${items.length} grant${items.length === 1 ? "" : "s"}.`,
+    "",
+    ...items.flatMap(({ grant, notificationTypes }) => [
+      grant.opportunity.title,
+      grant.opportunity.funderName,
+      `Updates: ${notificationTypes.map((type) => WATCH_NOTIFICATION_LABELS[type]).join(", ")}`,
+      `Match: ${Math.round(grant.score.overallScore)}/100`,
+      `Award: ${awardRange(grant)}`,
+      `Deadline: ${formatDeadline(grant.opportunity.deadline)}`,
+      `Source: ${grant.opportunity.sourceUrl}`,
+      "",
+    ]),
+    `Open in Copilot: ${copilotUrl}`,
+  ].join("\n");
+  const rows = items.map(({ grant, notificationTypes }) => {
+    const historical = grant.opportunity.source === "irs-990pf";
+    const badges = notificationTypes.map((type) =>
+      `<span style="display:inline-block;margin:0 5px 5px 0;padding:4px 7px;border:1px solid #30302e;border-radius:999px;background:#222220;color:#aaa9a3;font-size:8px;font-weight:700;line-height:10px">${escapeHtml(WATCH_NOTIFICATION_LABELS[type])}</span>`
+    ).join("");
+    return `
+      <tr>
+        <td style="padding:15px 0;border-top:1px solid #30302e">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+            <tr>
+              <td valign="top" style="padding-right:12px">
+                <div>${badges}</div>
+                <a href="${escapeHtml(grant.opportunity.sourceUrl)}" style="display:block;margin-top:4px;color:#f2f2ef;font-size:13px;font-weight:700;line-height:1.35">${escapeHtml(grant.opportunity.title)}</a>
+                <div style="margin-top:3px;color:#aaa9a3;font-size:10px;line-height:1.4">${escapeHtml(grant.opportunity.funderName)}</div>
+                <div style="margin-top:8px;color:#7b7a75;font-size:9px;line-height:1.4">
+                  <span style="color:${historical ? "#d99145" : "#f2f2ef"}">${historical ? "IRS prospect" : "Grants.gov"}</span>
+                  &nbsp;·&nbsp; ${escapeHtml(awardRange(grant))}
+                  &nbsp;·&nbsp; ${escapeHtml(formatDeadline(grant.opportunity.deadline))}
+                </div>
+              </td>
+              <td width="44" valign="top" align="right">
+                <div style="color:#f2f2ef;font-size:17px;font-weight:750;line-height:18px">${Math.round(grant.score.overallScore)}</div>
+                <div style="margin-top:2px;color:#7b7a75;font-size:7px;font-weight:700;letter-spacing:.06em;text-transform:uppercase">match</div>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>`;
+  }).join("");
+  const content = `
+    <p style="margin:0 0 17px;color:#aaa9a3;font-size:12px;line-height:1.55">${updateCount} update${updateCount === 1 ? "" : "s"} detected across ${items.length} grant${items.length === 1 ? "" : "s"} in this saved search.</p>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+      ${rows}
+    </table>
+    <div style="height:1px;margin-top:3px;background:#30302e;font-size:0;line-height:0">&nbsp;</div>
+    <div style="margin-top:16px">${copilotButton(copilotUrl)}</div>`;
+  const html = emailShell({
+    preheader: `${updateCount} GrantPilot watch updates are ready.`,
+    eyebrow: frequency.label,
+    title: "Your grant watch digest",
+    subtitle: `${items.length} grant${items.length === 1 ? "" : "s"} changed since the last successful check.`,
+    accent: "#55b88a",
+    content,
+  });
+  return { subject, plainText, html };
+}

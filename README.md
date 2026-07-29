@@ -155,14 +155,21 @@ interpret a percentage: **Worth reviewing** (recommended), **Strong matches**,
 or **Top matches only**. A user can also choose the watched scope, alert
 reasons, deadline reminder window, and delivery cadence while keeping the
 single **Create watch** action. Confirmation and alert messages are responsive
-HTML emails styled to match the black-and-cream GrantPilot workbench. Every
+HTML emails styled to match the black-and-charcoal GrantPilot workbench. Every
 alert uses event-specific content and includes **Open in Copilot** plus the
 original evidence/source link. When the MCP host exposes the current
 conversation URL, GrantPilot preserves it with the watch; otherwise
 `M365_COPILOT_RETURN_URL` provides the safe Copilot fallback. The watch checker
-suppresses duplicate notifications for the same unchanged event. While the server is running, a lightweight
-background poll checks which watches are due; each watch still honors its own
-as-detected, daily, or weekly cadence.
+suppresses duplicate notifications for the same unchanged event. Each due
+check reruns the saved criteria against the current normalized local indexes,
+uses the public Grants.gov `search2` API for newly discoverable federal
+records, verifies selected federal details with `fetchOpportunity`, rescoring
+the refreshed records while preserving the original `queryId`. Daily and
+weekly watches combine all detected changes into one digest; **As detected**
+sends individual alerts. Preview-only or failed deliveries are not marked as
+notified, so they remain eligible for delivery after email credentials recover.
+While the server is running, a lightweight background poll checks which
+watches are due; each watch still honors its own cadence.
 
 ## Demo (required)
 

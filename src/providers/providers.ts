@@ -11,6 +11,8 @@ export type OpportunitySearchQuery={
  maximumAward?:number;
  sources?:GrantSource[];
  limit:number;
+ live?:boolean;
+ background?:boolean;
 };
 export interface OpportunityProvider{
  source:GrantSource;
@@ -47,12 +49,19 @@ export class GrantsGovProvider implements OpportunityProvider{
  private fallback=new MockOpportunityProvider(this.source);
  async search(query:OpportunitySearchQuery){
   const queries=query.searchQueries?.length?query.searchQueries:[query.query].filter((value):value is string=>Boolean(value));
-  const perQuery=Math.max(20,Math.ceil(query.limit/Math.max(queries.length,1)));
-  const indexed=[...new Map(
+  const perQuery=query.background
+   ?Math.max(8,Math.ceil(query.limit/Math.max(queries.length,1)))
+   :Math.max(20,Math.ceil(query.limit/Math.max(queries.length,1)));
+   const indexed=[...new Map(
    queries.flatMap(value=>localGrantIndex.searchFederal(value,perQuery))
     .map(item=>[item.id,item] as const)
   ).values()].slice(0,query.limit);
-  return indexed.length?indexed:this.fallback.search(query);
+  if(!query.live)return indexed.length?indexed:this.fallback.search(query);
+  const live=await this.searchLive(queries);
+  const combined=[...new Map(
+   [...live,...indexed].map(item=>[item.id,item] as const)
+  ).values()].slice(0,query.limit);
+  return combined.length?combined:this.fallback.search(query);
  }
  async getById(id:string){return localGrantIndex.getFederal(id)??this.fallback.getById(id)}
  async verifySelected(opportunity:GrantOpportunity){
@@ -81,6 +90,66 @@ export class GrantsGovProvider implements OpportunityProvider{
   },false);
   return cached.data;
  }
+ private async searchLive(queries:string[]){
+  const hits:GrantOpportunity[]=[];
+  for(const keyword of queries.slice(0,4)){
+   try{
+    const cached=await grantCache.getOrLoad(`grants-gov:search2:${keyword}`,15*60_000,async()=>{
+     const response=await fetchRetry(`${process.env.GRANTS_GOV_API_BASE_URL??"https://api.grants.gov"}/v1/api/search2`,{
+      method:"POST",
+      headers:{"content-type":"application/json"},
+      body:JSON.stringify({
+       rows:15,
+       keyword,
+       oppStatuses:"forecasted|posted",
+      }),
+     });
+     const body:any=await response.json();
+     if(body.errorcode!==0||!Array.isArray(body.data?.oppHits))
+      throw new Error(body.msg??"Grants.gov search2 did not return opportunities");
+     return body.data.oppHits as any[];
+    });
+    for(const hit of cached.data){
+     const sourceId=String(hit.id??"");
+     if(!sourceId)continue;
+     const forecasted=/forecast/i.test(String(hit.oppStatus??""));
+     hits.push({
+      id:`grantsgov-${sourceId}`,
+      source:"grants-gov",
+      sourceId,
+      recordCategory:forecasted?"forecasted-federal-opportunity":"current-federal-opportunity",
+      title:String(hit.title??"Untitled Grants.gov opportunity"),
+      funderName:String(hit.agencyName??hit.agency??hit.agencyCode??"Federal agency"),
+      funderType:"federal",
+      summary:String(hit.title??""),
+      missionTopics:[keyword],
+      populationsServed:[],
+      eligibleApplicantTypes:[],
+      eligibleLocations:[{country:"US",nationwide:true,description:"Review the official notice for geographic eligibility."}],
+      postedDate:date(hit.openDate),
+      deadline:date(hit.closeDate),
+      fundingOpportunityNumber:hit.number?String(hit.number):undefined,
+      assistanceListingNumbers:Array.isArray(hit.alnist)
+       ?hit.alnist.map(String)
+       :Array.isArray(hit.cfdaList)
+        ?hit.cfdaList.map(String)
+        :[],
+      opportunityStatus:forecasted?"forecasted":"open",
+      sourceUrl:`https://www.grants.gov/search-results-detail/${sourceId}`,
+      sourceDisclaimer:"Official federal opportunity discovered through the Grants.gov search2 API; confirm final requirements on Grants.gov.",
+      requirements:[],
+     });
+    }
+   }catch{
+    // A live-search outage must not suppress the complete local index.
+   }
+  }
+  const unique=[...new Map(hits.map(item=>[item.id,item] as const)).values()].slice(0,16);
+  return Promise.all(unique.map(async item=>{
+   try{return await this.verifySelected(item)}
+   catch{return item}
+  }));
+ }
 }
 
 export class Irs990PfProspectProvider implements OpportunityProvider{
@@ -92,13 +161,17 @@ export class Irs990PfProspectProvider implements OpportunityProvider{
   // IRS index CSV is staged. Until then, clearly labeled demo prospects may be
   // enabled for hackathon continuity.
   const queries=query.searchQueries?.length?query.searchQueries:[query.query].filter((value):value is string=>Boolean(value));
-  const perQuery=Math.max(100,Math.ceil(query.limit/Math.max(queries.length,1)));
+  const perQuery=query.background
+   ?Math.max(12,Math.ceil(query.limit/Math.max(queries.length,1)))
+   :Math.max(100,Math.ceil(query.limit/Math.max(queries.length,1)));
   const indexed=[...new Map(
    queries.flatMap(value=>localGrantIndex.searchPrivateProspects(value,perQuery,query.preferredStates,{
     minimum:query.minimumAward,maximum:query.maximumAward,
    }))
     .map(item=>[item.id,item] as const)
-  ).values()].slice(0,Math.min(2_000,query.limit*5));
+  ).values()].slice(0,query.background
+   ?Math.min(320,query.limit*2)
+   :Math.min(2_000,query.limit*5));
   if(indexed.length)return indexed;
   if(process.env.DEMO_IRS_PROSPECTS==="false")return[];
   return this.fallback.search(query);

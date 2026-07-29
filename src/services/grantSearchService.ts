@@ -1,7 +1,7 @@
 import {createHash,randomUUID} from "node:crypto";
 import type {
  GrantOpportunity,GrantResult,GrantSource,MatchWeights,OrganizationProfile,
- ProjectProfile,SearchOutput,
+ ProjectProfile,SearchOutput,GrantSearchResultType,
 } from "../domain/types.js";
 import {DEFAULT_WEIGHTS} from "../domain/types.js";
 import {
@@ -30,8 +30,10 @@ export type SearchInput={
  weights?:MatchWeights;
  limit?:number;
  refreshData?:boolean;
+ queryId?:string;
+ backgroundRefresh?:boolean;
 };
-export type GrantResultType="current-federal"|"forecasted-federal"|"historical-private-prospect";
+export type GrantResultType=GrantSearchResultType;
 export const MAX_SEARCH_RESULTS=100;
 
 const grantsGovProvider=new GrantsGovProvider();
@@ -230,12 +232,16 @@ export async function searchGrants(input:SearchInput):Promise<SearchOutput>{
   q:input.query,searchQueries,sources,resultTypes,filters,preferredStates,
   topics:input.project.topics,mission:input.organization.missionTopics,
  })).digest("hex");
- const candidateLimit=Math.min(420,Math.max(300,limit*30));
+ const candidateLimit=input.backgroundRefresh
+  ?Math.min(160,Math.max(100,limit*2))
+  :Math.min(420,Math.max(300,limit*30));
  const cached=await grantCache.getOrLoad<GrantOpportunity[]>(`search:v12:${key}`,3_600_000,async()=>{
   const settled=await Promise.all(providers.filter(provider=>sources.includes(provider.source)).map(async provider=>{
    try{return await provider.search({
-    query:input.query,searchQueries,preferredStates,limit:candidateLimit,
+   query:input.query,searchQueries,preferredStates,limit:candidateLimit,
     minimumAward:filters.minimumAward,maximumAward:filters.maximumAward,
+    live:Boolean(input.refreshData&&process.env.NODE_ENV!=="test"),
+    background:Boolean(input.backgroundRefresh),
    })}
    catch{
     warnings.push(`${provider.source} was unavailable; other sources are still shown.`);
@@ -321,13 +327,20 @@ export async function searchGrants(input:SearchInput):Promise<SearchOutput>{
  }
 
  const output:SearchOutput={
-  queryId:`query-${randomUUID().slice(0,8)}`,searchedAt:new Date().toISOString(),
+  queryId:input.queryId??`query-${randomUUID().slice(0,8)}`,searchedAt:new Date().toISOString(),
   resultCount:grants.length,
   sourceCounts:{"grants-gov":federalCount,"irs-990pf":privateCount},
   weights,grants,warnings,organization:input.organization,project:input.project,
   awardRange:filters.minimumAward!==undefined||filters.maximumAward!==undefined
    ?{minimumAward:filters.minimumAward,maximumAward:filters.maximumAward}
    :undefined,
+  searchCriteria:{
+   query:input.query,
+   sources,
+   resultTypes,
+   filters,
+   limit,
+  },
  };
  grantRepository.saveSearch(output);
  // The widget may remain open while the development server restarts. Persist
@@ -335,6 +348,26 @@ export async function searchGrants(input:SearchInput):Promise<SearchOutput>{
  // from the same query instead of failing with an unknown grant ID.
  await grantRepository.flush();
  return output;
+}
+
+export async function refreshSavedSearch(search:SearchOutput){
+ const criteria=search.searchCriteria;
+ return searchGrants({
+  queryId:search.queryId,
+  query:criteria?.query,
+  organization:search.organization,
+  project:search.project,
+  sources:criteria?.sources??(["grants-gov","irs-990pf"] as GrantSource[]),
+  resultTypes:criteria?.resultTypes,
+  filters:criteria?.filters,
+  weights:search.weights,
+  limit:criteria?.limit??Math.min(MAX_SEARCH_RESULTS,Math.max(80,search.resultCount)),
+  // Bypass the normalized query cache, re-read the current local indexes,
+  // discover new Grants.gov records through search2, and verify selected
+  // federal details through fetchOpportunity.
+  refreshData:true,
+  backgroundRefresh:true,
+ });
 }
 
 export function rescoreGrants(queryId:string,grantIds:string[],weights:MatchWeights){
