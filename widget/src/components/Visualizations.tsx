@@ -132,7 +132,7 @@ function MatchMatrix({ grants, selectedId, onSelect }: Omit<Props, "view" | "con
           <GrantHoverCard
             grant={active}
             point={{ x: x(active.chart.applicationEffort), y: y(active.score.overallScore) }}
-            note={active.opportunity.source === "irs-990pf" ? "Historical prospect — not a confirmed open opportunity" : undefined}
+            note={active.opportunity.source === "irs-990pf" ? "Evidence-backed potential private donor/funder candidate worth researching and possibly contacting." : undefined}
           />
         )}
       </div>

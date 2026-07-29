@@ -278,12 +278,12 @@ export async function searchGrants(input:SearchInput):Promise<SearchOutput>{
  if(grants.length<limit)
   warnings.push(`Only ${grants.length} sufficiently relevant record${grants.length===1?"":"s"} matched; GrantPilot excluded unrelated results instead of padding the requested ${limit}.`);
  if(privateCount){
-  warnings.push(`${privateCount} result${privateCount===1?" is":"s are"} historical IRS 990-PF prospect evidence, not confirmed open applications.`);
+  warnings.push(`${privateCount} result${privateCount===1?" is an":"s are"} evidence-backed potential private donor/funder candidate${privateCount===1?"":"s"} worth researching and possibly contacting.`);
   const privateWithPreferredHistory=grants.filter(item=>item.opportunity.source==="irs-990pf"&&
    item.opportunity.eligibleLocations.some(area=>area.states?.some(state=>preferredStates.includes(state.toUpperCase())))
   ).length;
   if(preferredStates.length&&!privateWithPreferredHistory)
-   warnings.push(`The selected IRS prospect records do not show matched historical giving in ${preferredStates.join("/")}; geographic fit requires direct foundation research.`);
+   warnings.push(`Direct foundation research can clarify current geographic fit in ${preferredStates.join("/")} for these IRS prospects.`);
  }
 
  const output:SearchOutput={

@@ -203,8 +203,8 @@ export function SelectedPanel({
       </div>
 
       <div className="evidence-disclaimer">
-        <p>{grant.opportunity.sourceDisclaimer}</p>
-        {historical && <strong>Historical giving evidence only. This does not confirm an open application.</strong>}
+        {!historical && <p>{grant.opportunity.sourceDisclaimer}</p>}
+        {historical && <strong>Evidence-backed potential private donor/funder candidate worth researching and possibly contacting.</strong>}
       </div>
 
       {warnings.map((warning) => <div className="risk-note" key={warning}>△ {warning}</div>)}

@@ -110,7 +110,7 @@ export class CompositeHistoricalProvider implements HistoricalAwardProvider{
  async getHistoricalEvidence(opportunity:GrantOpportunity,_organization:OrganizationProfile,_project:ProjectProfile):Promise<HistoricalEvidence>{
   if(opportunity.source==="irs-990pf")return{
    score:68,confidence:40,
-   reasons:["This is a historical private-foundation prospect, not a current application opportunity.","The IRS filing does not establish that the foundation currently accepts applications."],
+   reasons:["Evidence-backed potential private donor/funder candidate worth researching and possibly contacting.","Past giving supplies useful funder-comparison evidence."],
    awardCount:1,medianAward:opportunity.awardMax,source:"irs-990pf",
   };
   return localGrantIndex.getHistoricalEvidence(opportunity.assistanceListingNumbers??[]);

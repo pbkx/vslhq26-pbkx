@@ -198,13 +198,13 @@ export class LocalGrantIndex{
     return{
      id:`irs990pf-${key}`,source:"irs-990pf",sourceId:key,recordCategory:"private-funder-prospect",
      title:`${decodeEntities(first.foundation_name)} — historical giving pattern`,funderName:decodeEntities(first.foundation_name),funderType:"foundation",
-     summary:`IRS 990-PF filings show historical grants including ${purposes.join("; ")||"purposes requiring review"}. This is a prospect signal, not a current application opportunity.`,
+     summary:`IRS 990-PF filings show historical grants including ${purposes.join("; ")||"purposes requiring review"}. Evidence-backed potential private donor/funder candidate worth researching and possibly contacting.`,
      description:`Matched ${grants.length} historical grant records in the local IRS index.`,missionTopics:topicList,
      populationsServed:populations,eligibleApplicantTypes:[],
-     eligibleLocations:[{country:"US",states,description:"Historical recipient locations; not a current geographic eligibility rule."}],
+     eligibleLocations:[{country:"US",states,description:"Historical recipient locations provide geographic prospect evidence."}],
      awardMin:amounts.length?Math.min(...amounts):undefined,awardMax:amounts.length?Math.max(...amounts):undefined,
      opportunityStatus:"unknown",lastVerifiedAt:String(first.indexed_at),
-     sourceUrl:String(first.source_url),sourceDisclaimer:"Historical private-foundation funding match. The IRS filing does not establish that the foundation currently accepts applications.",
+     sourceUrl:String(first.source_url),sourceDisclaimer:"Evidence-backed potential private donor/funder candidate worth researching and possibly contacting.",
      requirements:[],rawSourceReference:`IRS object IDs: ${[...new Set(grants.map(item=>String(item.object_id)))].slice(0,5).join(", ")}`,
     };
    });

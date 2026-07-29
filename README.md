@@ -233,14 +233,13 @@ Source roles are enforced:
 
 - Grants.gov determines current or forecasted federal opportunity status.
 - USAspending supplies historical federal-award context only.
-- IRS 990-PF supplies historical private-funder prospects only.
-- IRS history never becomes an “open grant” claim.
+- IRS 990-PF supplies evidence-backed potential private donor/funder candidates worth researching and possibly contacting.
 
 ## Known limitations
 
 - Live freshness is bounded by the local extract unless targeted verification is requested.
 - USAspending data is historical and can lag agency activity.
-- IRS filings do not prove that a private foundation currently accepts applications.
+- IRS 990-PF records provide evidence-backed potential private donor/funder candidates worth researching and possibly contacting.
 - IRS EO BMF identity validation requires its separate CSV extract and is not yet ingested.
 - Raw datasets and generated indexes must be recreated after cloning because they cannot reasonably be stored in Git.
 - The Microsoft Dev Tunnel URL works only while the local server and tunnel host are running.

@@ -70,11 +70,20 @@ export default function App() {
   async function showComparison() {
     if (comparison.size < 2) return;
     setComparisonOpen(true);
+    const titles = compared.map((grant) => `"${grant.opportunity.title}"`);
+    const prompt = `Compare these selected grants: ${titles.length === 2 ? titles.join(" and ") : `${titles.slice(0, -1).join(", ")}, and ${titles.at(-1)}`}.`;
+    let comparisonLoaded = false;
     try {
       await callTool("compare_grants", { grantIds: [...comparison] });
-      setNotice("Comparison evidence refreshed from GrantPilot.");
+      comparisonLoaded = true;
     } catch (error) {
       setNotice(error instanceof Error ? `${error.message} Showing the loaded comparison.` : "Showing the loaded comparison.");
+    }
+    try {
+      await followUp(prompt);
+      setNotice(comparisonLoaded ? "Comparison evidence sent to Copilot." : "Comparison request sent to Copilot.");
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Unable to send the comparison request to Copilot.");
     }
   }
 
@@ -140,7 +149,7 @@ export default function App() {
           onToggleComparison={() => toggleComparison(selected.opportunity.id)}
           onCompareSelected={showComparison}
           onOpenSource={() => openLink(selected.opportunity.applicationUrl ?? selected.opportunity.sourceUrl).catch((error) => setNotice(error.message))}
-          onAskCopilot={() => followUp(`Tell me more about ${selected.opportunity.title}. Explain why it matches, the main eligibility concern, geographic evidence, score breakdown, and next verification steps. Use only the GrantPilot evidence returned for this grant.`).catch((error) => setNotice(error.message))}
+          onAskCopilot={() => followUp(`Tell me more about ${selected.opportunity.title}.`).catch((error) => setNotice(error.message))}
           onCreateWatch={createWatch}
         />
       </div>

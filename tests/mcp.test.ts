@@ -2,7 +2,10 @@ import { afterEach, describe, expect, it } from "vitest";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { createGrantPilotMcpServer, REQUIRED_TOOLS } from "../src/mcp/createServer.js";
-import { GRANTPILOT_WIDGET_URI } from "../src/mcp/resources/grantPilotWidget.js";
+import {
+  GRANTPILOT_LEGACY_WIDGET_URIS,
+  GRANTPILOT_WIDGET_URI,
+} from "../src/mcp/resources/grantPilotWidget.js";
 
 let close: (() => Promise<void>) | undefined;
 afterEach(() => close?.());
@@ -63,8 +66,28 @@ describe("GrantPilot MCP", () => {
     expect(output.context.maximumAward).toBeUndefined();
     expect(output.grants.every((grant: any) =>
       grant.score.components.programSizeFit.reasons[0].includes("No target award size was requested"))).toBe(true);
-    expect((result.content as any)[0].text).toContain("Do not add or recommend any outside funder");
+    const responseText = (result.content as any)[0].text as string;
+    expect(responseText).toContain("## Current Federal Opportunities (Open/Active)");
+    expect(responseText).toContain("## Historical Private-Foundation Prospects");
+    expect(responseText).toContain("Evidence-backed potential private donor/funder candidates worth researching and possibly contacting.");
+    for (const grant of output.grants) {
+      expect(responseText).toContain(
+        grant.opportunity.source === "irs-990pf"
+          ? grant.opportunity.funderName
+          : grant.opportunity.title,
+      );
+    }
     expect(Buffer.byteLength(JSON.stringify(result))).toBeLessThan(48 * 1024);
+
+    const selectedIds = output.grants.slice(0, 2).map((grant: any) => grant.opportunity.id);
+    const comparison = await client.callTool({
+      name: "compare_grants",
+      arguments: { grantIds: selectedIds },
+    });
+    const comparisonOutput = comparison.structuredContent as any;
+    expect(comparisonOutput.grants).toHaveLength(2);
+    expect(comparisonOutput.grants[0].componentScores).toBeTruthy();
+    expect((comparison.content as any)[0].text).toContain("primary pursuit");
 
     if (output.hasMore) {
       const more = await client.callTool({
@@ -110,5 +133,8 @@ describe("GrantPilot MCP", () => {
     const resource = await client.readResource({ uri: GRANTPILOT_WIDGET_URI });
     expect(resource.contents[0].mimeType).toBe("text/html;profile=mcp-app");
     expect((resource.contents[0] as any).text).toContain("GrantPilot");
+    const cachedResource = await client.readResource({ uri: GRANTPILOT_LEGACY_WIDGET_URIS[0] });
+    expect(cachedResource.contents[0].uri).toBe(GRANTPILOT_LEGACY_WIDGET_URIS[0]);
+    expect(cachedResource.contents[0].mimeType).toBe("text/html;profile=mcp-app");
   });
 });
