@@ -6,10 +6,12 @@ const endpoint = new URL(process.env.MCP_URL ?? "http://localhost:3000/mcp");
 const client = new Client({ name: "grantpilot-widget-preview", version: "1" });
 const transport = new StreamableHTTPClientTransport(endpoint);
 await client.connect(transport);
+const query = process.env.GRANTPILOT_PREVIEW_QUERY
+  ?? "Find grants for a Washington nonprofit teaching practical AI skills to low-income adults. We need between $100,000 and $500,000.";
 const result = await client.callTool({
   name: "search_grants",
   arguments: {
-    query: "Find grants for a Washington nonprofit teaching practical AI skills to low-income adults. We need between $100,000 and $500,000.",
+    query,
     filters: { onlyOpen: true },
   },
 });

@@ -119,7 +119,15 @@ export function scoreGrant(grant:GrantOpportunity,org:OrganizationProfile,projec
    [evidence("project","geography",projectStates.join(", ")),evidence("opportunity","eligibleLocations",eligibleStates.join(", ")||"Not specified")],
    privateProspect?["Current geographic eligibility is unknown."]:eligibleStates.length||nationwide?[]:["Eligible states were not specified."]
   ),
-  programSizeFit:component(sizeScore,weights.programSizeFit,min!==undefined||max!==undefined?90:40,[sizeScore===100?"Project budget falls inside the stated award range.":"Project budget differs from the stated or known range."],[evidence("project","estimatedBudget",budget??"Unknown"),evidence("opportunity","awardRange",`${min??"?"}-${max??"?"}`)],min!==undefined||max!==undefined?[]:["No complete award range was supplied."]),
+  programSizeFit:component(
+   sizeScore,weights.programSizeFit,
+   budget===undefined?35:min!==undefined||max!==undefined?90:40,
+   [budget===undefined
+    ?"No target award size was requested; award fit is scored neutrally."
+    :sizeScore===100?"Project budget falls inside the stated award range.":"Project budget differs from the stated or known range."],
+   [evidence("project","estimatedBudget",budget??"Not requested"),evidence("opportunity","awardRange",`${min??"?"}-${max??"?"}`)],
+   budget===undefined?["No target award size was requested."]:min!==undefined||max!==undefined?[]:["No complete award range was supplied."]
+  ),
   historicalSimilarity:component(historical.score,weights.historicalSimilarity,historical.confidence,historical.reasons,[evidence("historical-award","comparableAwards",historical.awardCount)],historical.confidence?[]:["Historical award data was unavailable."]),
   deadlineFeasibility:component(deadline,weights.deadlineFeasibility,privateProspect?15:grant.deadline?95:35,[privateProspect?"IRS history does not establish a current application deadline.":days===undefined?"Deadline was not supplied.":`${days} days remain at ${org.applicationCapacity??"medium"} application capacity.`],[evidence("opportunity","deadline",grant.deadline??"Unknown"),evidence("organization","applicationCapacity",org.applicationCapacity??"medium")],grant.deadline?[]:["Deadline is unknown."])
  };

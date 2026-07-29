@@ -109,6 +109,8 @@ export function inferAwardRange(query?:string){
  const one=values[0];
  if(one!==undefined&&/(up to|maximum|ceiling|no more than)/i.test(query))return{maximumAward:one};
  if(one!==undefined&&/(at least|minimum|floor|more than)/i.test(query))return{minimumAward:one};
+ if(one!==undefined&&/\b(?:seeking|request(?:ing)?|need(?:ing)?|target(?:ing)?|award|grant amount|project budget)(?:\s+(?:about|around|of|is|for))?\s*\$?/i.test(query))
+  return{minimumAward:one,maximumAward:one};
  return{};
 }
 
@@ -179,7 +181,14 @@ export async function searchGrants(input:SearchInput):Promise<SearchOutput>{
  const warnings:string[]=[];
  const limit=Math.max(1,Math.min(MAX_SEARCH_RESULTS,input.limit??80));
  const inferredRange=inferAwardRange(input.query);
- const filters={...inferredRange,...input.filters};
+ const hasAuthoritativeQuery=Boolean(input.query?.trim());
+ // When a complete natural-language request is present, only an award range
+ // found in that request may constrain the search. This prevents an agent,
+ // stale demo payload, or previous UI state from silently reintroducing the
+ // old $100K–$500K demo range.
+ const filters=hasAuthoritativeQuery
+  ?{...input.filters,minimumAward:inferredRange.minimumAward,maximumAward:inferredRange.maximumAward}
+  :{...input.filters};
  const searchQueries=buildRetrievalQueries(input);
  const preferredStates=[
   ...input.project.geographicAreas.flatMap(area=>area.states??[]),
@@ -263,7 +272,9 @@ export async function searchGrants(input:SearchInput):Promise<SearchOutput>{
  const federalCount=grants.filter(item=>item.opportunity.source==="grants-gov").length;
  const privateCount=grants.filter(item=>item.opportunity.source==="irs-990pf").length;
  if(!federalCount&&sources.includes("grants-gov"))
-  warnings.push("No sufficiently mission-aligned current federal opportunity was found in the requested award range.");
+  warnings.push(filters.minimumAward!==undefined||filters.maximumAward!==undefined
+   ?"No sufficiently mission-aligned current federal opportunity was found in the requested award range."
+   :"No sufficiently mission-aligned current federal opportunity was found.");
  if(grants.length<limit)
   warnings.push(`Only ${grants.length} sufficiently relevant record${grants.length===1?"":"s"} matched; GrantPilot excluded unrelated results instead of padding the requested ${limit}.`);
  if(privateCount){
@@ -280,6 +291,9 @@ export async function searchGrants(input:SearchInput):Promise<SearchOutput>{
   resultCount:grants.length,
   sourceCounts:{"grants-gov":federalCount,"irs-990pf":privateCount},
   weights,grants,warnings,organization:input.organization,project:input.project,
+  awardRange:filters.minimumAward!==undefined||filters.maximumAward!==undefined
+   ?{minimumAward:filters.minimumAward,maximumAward:filters.maximumAward}
+   :undefined,
  };
  return grantRepository.saveSearch(output);
 }

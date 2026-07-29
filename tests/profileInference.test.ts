@@ -28,4 +28,17 @@ describe("prompt-derived search profiles", () => {
     expect(project.topics).toContain("hunger relief");
     expect(project.estimatedBudget).toBe(300_000);
   });
+
+  it("does not inherit or invent an award target when the prompt states no amount", () => {
+    const prompt = "Find grants for a New York nonprofit providing free food.";
+    const { organization, project } = mergeProfilesFromRequest(
+      prompt,
+      demoOrganization,
+      { ...demoProject, id: "model-generated-project", estimatedBudget: 300_000 },
+    );
+
+    expect(organization.headquarters.state).toBe("NY");
+    expect(project.title).toBe("Food Access and Hunger Relief");
+    expect(project.estimatedBudget).toBeUndefined();
+  });
 });

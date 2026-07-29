@@ -549,6 +549,19 @@ button:focus-visible, select:focus-visible, input:focus-visible { box-shadow: 0 
   transform: translate(-50%, -50%) rotate(45deg);
 }
 .single-award.private { background: var(--private); }
+.award-overflow {
+  position: absolute;
+  z-index: 3;
+  right: -1px;
+  top: 50%;
+  color: var(--federal);
+  font-size: 18px;
+  font-style: normal;
+  font-weight: 800;
+  line-height: 1;
+  transform: translateY(-54%);
+}
+.award-overflow.private { color: var(--private); }
 .original-award-track em {
   position: absolute;
   left: 8px;
@@ -884,41 +897,114 @@ button:focus-visible, select:focus-visible, input:focus-visible { box-shadow: 0 
 .comparison-grid dd { margin: 0; font-weight: 650; text-align: right; }
 
 .ranked-strip { margin: 14px 18px 0; overflow: hidden; }
-.ranked-heading { height: 45px; padding: 0 13px; display: flex; align-items: center; justify-content: space-between; gap: 10px; border-bottom: 1px solid var(--border); }
-.ranked-heading > div { display: flex; align-items: center; gap: 7px; }
-.ranked-heading h2 { margin: 0; font-size: 11px; }
-.ranked-heading span, .ranked-heading em { padding: 2px 6px; border-radius: 99px; background: var(--soft); color: var(--muted); font-size: 8px; font-style: normal; }
-.ranked-heading em { background: color-mix(in srgb, var(--positive) 12%, var(--surface)); color: var(--positive); }
-.ranked-heading p { margin: 0; color: var(--muted); font-size: 8px; }
-.ranked-list { max-height: 420px; overflow-y: auto; }
-.ranked-row { min-height: 45px; display: flex; align-items: stretch; border-bottom: 1px solid var(--border); }
-.ranked-row:last-child { border-bottom: 0; }
-.ranked-row:hover, .ranked-row.selected { background: var(--soft); }
-.rank-main {
-  flex: 1;
-  min-width: 0;
-  display: grid;
-  grid-template-columns: 25px 32px minmax(150px, 1.7fr) 94px 78px 88px 98px;
-  gap: 8px;
-  align-items: center;
-  padding: 5px 8px;
+.ranked-heading {
+  width: 100%;
+  min-height: 52px;
+  padding: 0 16px;
   border: 0;
   background: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
   text-align: left;
   cursor: pointer;
 }
-.rank-number { color: var(--muted); font-size: 8px; text-align: center; }
-.rank-score { width: 28px; height: 25px; display: grid; place-items: center; border-radius: 7px; background: var(--soft-2); font-size: 9px; }
-.rank-score.top { color: var(--positive); background: color-mix(in srgb, var(--positive) 12%, var(--surface)); }
-.rank-score.mid { color: var(--private); }
-.rank-score.low { color: var(--warning); }
+.ranked-strip.open .ranked-heading { border-bottom: 1px solid var(--border); }
+.ranked-heading:hover { background: color-mix(in srgb, var(--soft) 45%, transparent); }
+.ranked-heading > div { display: flex; align-items: center; gap: 8px; }
+.ranked-heading h2 { margin: 0; font-size: 14px; font-weight: 650; letter-spacing: -.01em; }
+.ranked-heading span, .ranked-heading em {
+  padding: 3px 8px;
+  border-radius: 99px;
+  background: var(--soft);
+  color: var(--muted);
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 650;
+}
+.ranked-heading em { background: color-mix(in srgb, var(--positive) 12%, var(--surface)); color: var(--positive); }
+.ranked-heading > svg { width: 16px; height: 16px; color: var(--muted); transition: transform .16s ease; }
+.ranked-strip:not(.open) .ranked-heading > svg { transform: rotate(180deg); }
+.ranked-table-scroll { width: 100%; overflow-x: auto; overflow-y: visible; }
+.ranked-table { min-width: 940px; }
+.ranked-columns, .ranked-row {
+  display: grid;
+  grid-template-columns: 32px 48px minmax(230px, 1fr) 132px 112px 116px 142px 66px;
+  gap: 12px;
+  align-items: center;
+}
+.ranked-columns {
+  min-height: 40px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--soft) 52%, var(--surface));
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: .055em;
+  text-transform: uppercase;
+}
+.ranked-columns span:nth-child(1), .ranked-columns span:nth-child(2), .ranked-columns span:last-child { text-align: center; }
+.ranked-list { max-height: none; overflow: visible; }
+.ranked-row {
+  min-height: 64px;
+  padding: 9px 16px;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  transition: background .14s ease;
+}
+.ranked-row:last-child { border-bottom: 0; }
+.ranked-row:hover { background: color-mix(in srgb, var(--soft) 55%, transparent); }
+.ranked-row.selected { background: color-mix(in srgb, var(--positive) 7%, var(--surface)); }
+.ranked-row:focus-visible { box-shadow: inset 0 0 0 2px var(--foreground); }
+.rank-number { color: var(--muted); font-size: 11px; font-weight: 650; text-align: center; font-variant-numeric: tabular-nums; }
+.rank-score { color: var(--foreground); font-size: 14px; font-weight: 700; text-align: center; font-variant-numeric: tabular-nums; }
 .rank-title { min-width: 0; }
 .rank-title strong, .rank-title small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.rank-title strong { font-size: 9px; }
-.rank-title small { margin-top: 2px; color: var(--muted); font-size: 8px; }
-.rank-award, .rank-deadline { color: var(--muted); font-size: 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.compare-check { flex: 0 0 62px; display: grid; place-content: center; justify-items: center; gap: 2px; border-left: 1px solid var(--border); color: var(--muted); font-size: 7px; cursor: pointer; }
-.compare-check input { width: 14px; height: 14px; accent-color: var(--foreground); }
+.rank-title strong { font-size: 12px; font-weight: 600; line-height: 1.25; }
+.rank-title small { margin-top: 4px; color: var(--muted); font-size: 11px; line-height: 1.2; }
+.rank-source-badge, .rank-eligibility-badge {
+  display: inline-flex;
+  width: fit-content;
+  max-width: 100%;
+  min-height: 30px;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: 99px;
+  background: var(--soft);
+  font-size: 10px;
+  font-weight: 650;
+  line-height: 1.15;
+}
+.rank-source-badge svg, .rank-eligibility-badge svg { width: 14px; height: 14px; flex: 0 0 auto; }
+.rank-source-badge.federal { color: var(--foreground); }
+.rank-source-badge.private {
+  border-color: color-mix(in srgb, var(--private) 28%, var(--border));
+  background: color-mix(in srgb, var(--private) 9%, var(--surface));
+  color: var(--private);
+}
+.rank-award, .rank-deadline { color: var(--foreground); font-size: 11px; line-height: 1.35; font-variant-numeric: tabular-nums; }
+.rank-deadline.muted { color: var(--muted); }
+.rank-eligibility-badge.eligible {
+  border-color: color-mix(in srgb, var(--positive) 28%, var(--border));
+  background: color-mix(in srgb, var(--positive) 9%, var(--surface));
+  color: var(--positive);
+}
+.rank-eligibility-badge.verify {
+  border-color: color-mix(in srgb, var(--private) 30%, var(--border));
+  background: color-mix(in srgb, var(--private) 9%, var(--surface));
+  color: var(--private);
+}
+.rank-eligibility-badge.ineligible {
+  border-color: color-mix(in srgb, var(--warning) 30%, var(--border));
+  background: color-mix(in srgb, var(--warning) 9%, var(--surface));
+  color: var(--warning);
+}
+.compare-check { display: grid; place-items: center; cursor: pointer; }
+.compare-check input { width: 18px; height: 18px; margin: 0; accent-color: var(--foreground); cursor: pointer; }
 .load-more { width: 100%; min-height: 48px; padding: 8px 14px; border: 0; border-top: 1px solid var(--border); background: var(--surface); display: flex; align-items: center; gap: 10px; text-align: left; cursor: pointer; }
 .load-more:hover { background: var(--soft); }
 .load-more > b { width: 27px; height: 27px; display: grid; place-items: center; border-radius: 8px; background: var(--black); color: var(--surface); font-size: 14px; }
@@ -977,9 +1063,7 @@ footer span:last-child { text-align: right; }
   .award-axis { margin-left: 43%; padding-right: 39px; }
   .award-row { grid-template-columns: minmax(110px, 43%) 1fr 32px; }
   .award-value { display: none; }
-  .rank-main { grid-template-columns: 24px 30px minmax(130px, 1fr) 80px; }
-  .rank-main .rank-award, .rank-main .rank-deadline, .rank-main .eligibility-badge { display: none; }
-  .ranked-heading p { display: none; }
+  .ranked-table { min-width: 900px; }
   footer { flex-direction: column; gap: 5px; }
   footer span:last-child { text-align: left; }
 }

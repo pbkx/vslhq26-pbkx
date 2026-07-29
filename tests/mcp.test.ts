@@ -47,12 +47,22 @@ describe("GrantPilot MCP", () => {
 
     const result = await client.callTool({
       name: "search_grants",
-      arguments: { query: "AI workforce", requestedResultCount: 10 },
+      arguments: {
+        query: "AI workforce",
+        requestedResultCount: 10,
+        project: { estimatedBudget: 300_000 },
+        filters: { minimumAward: 100_000, maximumAward: 500_000 },
+      },
     });
     const output = result.structuredContent as any;
     expect(output.totalResultCount).toBeGreaterThan(10);
     expect(output.grants.length).toBeGreaterThan(5);
     expect(output.context.projectTitle).toBeTruthy();
+    expect(output.context.projectBudget).toBeUndefined();
+    expect(output.context.minimumAward).toBeUndefined();
+    expect(output.context.maximumAward).toBeUndefined();
+    expect(output.grants.every((grant: any) =>
+      grant.score.components.programSizeFit.reasons[0].includes("No target award size was requested"))).toBe(true);
     expect((result.content as any)[0].text).toContain("Do not add or recommend any outside funder");
     expect(Buffer.byteLength(JSON.stringify(result))).toBeLessThan(48 * 1024);
 
@@ -88,6 +98,8 @@ describe("GrantPilot MCP", () => {
     expect(food.totalResultCount).toBeLessThanOrEqual(30);
     expect(food.context.organizationLocation).toBe("NY");
     expect(food.context.projectTitle).toBe("Food Access and Hunger Relief");
+    expect(food.context.minimumAward).toBe(100_000);
+    expect(food.context.maximumAward).toBe(500_000);
     expect(food.grants.length).toBeGreaterThan(0);
     expect(food.grants.every((grant: any) =>
       grant.score.components.missionAlignment.score >= 45)).toBe(true);

@@ -191,7 +191,12 @@ export function mergeProfilesFromRequest(
       targetPopulations: requestProject?.targetPopulations?.length
         ? requestProject.targetPopulations
         : inferred.project.targetPopulations,
-      estimatedBudget: queryNamesBudget ? inferred.project.estimatedBudget : requestProject?.estimatedBudget,
+      // `query` is documented as the complete, authoritative user request.
+      // Never let a demo-shaped or model-inferred project payload add a budget
+      // that the user did not actually state.
+      estimatedBudget: query?.trim()
+        ? queryNamesBudget ? inferred.project.estimatedBudget : undefined
+        : requestProject?.estimatedBudget,
     } satisfies ProjectProfile,
   };
 }

@@ -22,10 +22,6 @@ type Props = {
 };
 
 const MATRIX_PAD = { top: 6, bottom: 12, left: 8, right: 5 };
-const AWARD_DOMAIN_MAX = 900_000;
-const TARGET_MIN = 100_000;
-const TARGET_MAX = 500_000;
-const AWARD_TICKS = [0, 200_000, 400_000, 600_000, 800_000];
 const DEADLINE_HORIZON = 365;
 const DEADLINE_REFERENCE_LINES = [30, 60, 90];
 const DEADLINE_TICKS = [0, 60, 120, 180, 240, 300, 360];
@@ -151,7 +147,44 @@ const AWARD_SORT_OPTIONS = [
   { value: "title", label: "Sort: Title" },
 ];
 
-function AwardFit({ grants, selectedId, onSelect }: Omit<Props, "view">) {
+function niceAwardDomain(value: number) {
+  const minimum = Math.max(value, 10_000);
+  const magnitude = 10 ** Math.floor(Math.log10(minimum));
+  const normalized = minimum / magnitude;
+  const ceiling = normalized <= 1 ? 1 : normalized <= 2 ? 2 : normalized <= 2.5 ? 2.5 : normalized <= 5 ? 5 : 10;
+  return ceiling * magnitude;
+}
+
+function percentile(sortedValues: number[], ratio: number) {
+  if (!sortedValues.length) return 0;
+  const index = (sortedValues.length - 1) * ratio;
+  const lower = Math.floor(index);
+  const upper = Math.ceil(index);
+  if (lower === upper) return sortedValues[lower]!;
+  return sortedValues[lower]! + (sortedValues[upper]! - sortedValues[lower]!) * (index - lower);
+}
+
+function adaptiveAwardDomain(grants: GrantResult[], targetMinimum?: number, targetMaximum?: number) {
+  const values = grants
+    .flatMap((grant) => [grant.opportunity.awardMin, grant.opportunity.awardMax])
+    .filter((value): value is number => value !== undefined && value > 0)
+    .sort((a, b) => a - b);
+  const requestedMaximum = Math.max(targetMinimum ?? 0, targetMaximum ?? 0);
+  if (!values.length) return niceAwardDomain(Math.max(requestedMaximum, 100_000));
+
+  const largest = values[values.length - 1]!;
+  if (values.length < 5) return niceAwardDomain(Math.max(largest, requestedMaximum) * 1.05);
+
+  const firstQuartile = percentile(values, 0.25);
+  const thirdQuartile = percentile(values, 0.75);
+  const upperFence = thirdQuartile + 1.5 * Math.max(0, thirdQuartile - firstQuartile);
+  const inlierValues = values.filter((value) => value <= upperFence);
+  const inlierMaximum = inlierValues[inlierValues.length - 1] ?? largest;
+  const robustMaximum = largest > inlierMaximum * 2.5 ? inlierMaximum : largest;
+  return niceAwardDomain(Math.max(robustMaximum, requestedMaximum) * 1.05);
+}
+
+function AwardFit({ grants, selectedId, onSelect, context }: Omit<Props, "view">) {
   const [sort, setSort] = useState<AwardSort>("score");
   const rows = useMemo(() => {
     const copy = [...grants];
@@ -162,11 +195,40 @@ function AwardFit({ grants, selectedId, onSelect }: Omit<Props, "view">) {
       (a.opportunity.awardMax ?? a.opportunity.awardMin ?? 0));
     return copy;
   }, [grants, sort]);
-  const pct = (value: number) => Math.min(100, (Math.max(0, value) / AWARD_DOMAIN_MAX) * 100);
+  const targetMinimum = context?.minimumAward;
+  const targetMaximum = context?.maximumAward;
+  const hasTarget = targetMinimum !== undefined || targetMaximum !== undefined;
+  const largestAward = Math.max(
+    0,
+    targetMinimum ?? 0,
+    targetMaximum ?? 0,
+    ...grants.map((grant) => grant.opportunity.awardMax ?? grant.opportunity.awardMin ?? 0),
+  );
+  const awardDomainMax = adaptiveAwardDomain(grants, targetMinimum, targetMaximum);
+  const hasAwardOverflow = largestAward > awardDomainMax;
+  const awardTicks = Array.from({ length: 5 }, (_, index) => awardDomainMax * index / 4);
+  const pct = (value: number) => Math.min(100, (Math.max(0, value) / awardDomainMax) * 100);
+  const targetLeft = pct(targetMinimum ?? 0);
+  const targetRight = pct(targetMaximum ?? awardDomainMax);
+  const targetBandStyle = {
+    left: `${targetLeft}%`,
+    width: `${Math.max(targetRight - targetLeft, 0.6)}%`,
+  };
+  const subtitle = targetMinimum !== undefined && targetMaximum !== undefined
+    ? targetMinimum === targetMaximum
+      ? `Award ranges vs. your ${formatMoney(targetMinimum)} target`
+      : `Award ranges vs. your ${formatMoney(targetMinimum)}–${formatMoney(targetMaximum)} target band`
+    : targetMinimum !== undefined
+      ? `Award ranges vs. your minimum target of ${formatMoney(targetMinimum)}`
+      : targetMaximum !== undefined
+        ? `Award ranges vs. your maximum target of ${formatMoney(targetMaximum)}`
+        : hasAwardOverflow
+          ? "Award ranges across matched opportunities · adaptive scale; larger outliers are marked at the edge"
+          : "Award ranges across matched opportunities · no target amount requested";
 
   return (
     <section className="visual-card original-visual award-fit-visual content-fit-visual">
-      <ChartHeader title="Award Fit" subtitle="Award ranges vs. your $100K–$500K target band">
+      <ChartHeader title="Award Fit" subtitle={subtitle}>
         <SelectControl
           value={sort}
           options={AWARD_SORT_OPTIONS}
@@ -180,8 +242,12 @@ function AwardFit({ grants, selectedId, onSelect }: Omit<Props, "view">) {
           <div className="original-award-axis">
             <div className="award-opportunity-label">Opportunity</div>
             <div className="award-axis-track">
-              <i className="target-band" style={{ left: `${pct(TARGET_MIN)}%`, width: `${pct(TARGET_MAX) - pct(TARGET_MIN)}%` }} />
-              {AWARD_TICKS.map((tick) => <span key={tick} style={{ left: `${pct(tick)}%` }}>{formatMoney(tick)}</span>)}
+              {hasTarget && <i className="target-band" style={targetBandStyle} />}
+              {awardTicks.map((tick, index) => (
+                <span key={tick} style={{ left: `${pct(tick)}%` }}>
+                  {formatMoney(tick)}{hasAwardOverflow && index === awardTicks.length - 1 ? "+" : ""}
+                </span>
+              ))}
             </div>
           </div>
           <ul className="original-award-rows">
@@ -192,16 +258,18 @@ function AwardFit({ grants, selectedId, onSelect }: Omit<Props, "view">) {
               const single = maximum !== undefined && minimum === maximum;
               const left = pct(minimum);
               const right = pct(maximum ?? minimum);
+              const exceedsScale = (maximum ?? minimum) > awardDomainMax;
               return (
                 <li key={grant.opportunity.id}>
                   <button
                     type="button"
                     className={`original-award-row ${grant.opportunity.id === selectedId ? "selected" : ""}`}
                     onClick={() => onSelect(grant.opportunity.id)}
+                    title={`${grant.opportunity.title} · ${awardRange(grant)}${exceedsScale ? " · extends beyond the adaptive chart scale" : ""}`}
                   >
                     <span className="award-row-name"><strong>{grant.opportunity.title}</strong><small>{grant.opportunity.funderName}</small></span>
                     <span className="original-award-track">
-                      <i className="target-band" style={{ left: `${pct(TARGET_MIN)}%`, width: `${pct(TARGET_MAX) - pct(TARGET_MIN)}%` }} />
+                      {hasTarget && <i className="target-band" style={targetBandStyle} />}
                       <i className="range-baseline" />
                       {unknown ? (
                         <em>Unknown</em>
@@ -214,6 +282,7 @@ function AwardFit({ grants, selectedId, onSelect }: Omit<Props, "view">) {
                           <i className={`award-endpoint ${grant.opportunity.source === "irs-990pf" ? "private" : "federal"}`} style={{ left: `${right}%` }} />
                         </>
                       )}
+                      {exceedsScale && <i className={`award-overflow ${grant.opportunity.source === "irs-990pf" ? "private" : "federal"}`}>›</i>}
                     </span>
                     <b className="award-row-score">{grant.score.overallScore}</b>
                   </button>
