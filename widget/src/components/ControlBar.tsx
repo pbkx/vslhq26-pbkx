@@ -1,6 +1,6 @@
 import type { AwardFilter, EligibilityFilter, Filters, SourceFilter, ViewId } from "../grantView";
 import { DEFAULT_FILTERS } from "../grantView";
-import type { SearchOutput } from "../types";
+import type { GrantResult, SearchOutput } from "../types";
 import { SelectControl, type SelectOption } from "./SelectControl";
 
 const VIEWS: { id: ViewId; label: string; icon: "matrix" | "award" | "heatmap" | "deadline" }[] = [
@@ -47,18 +47,20 @@ export function ControlBar({
   onViewChange,
   filters,
   onFiltersChange,
+  visibleGrants,
 }: {
   data: SearchOutput;
   view: ViewId;
   onViewChange: (view: ViewId) => void;
   filters: Filters;
   onFiltersChange: (filters: Filters) => void;
+  visibleGrants: GrantResult[];
 }) {
   const set = <K extends keyof Filters>(key: K, value: Filters[K]) => onFiltersChange({ ...filters, [key]: value });
   const activeFilters = Number(filters.source !== "all") + Number(filters.eligibility !== "all") + Number(filters.minScore > 0) + Number(filters.award !== "all");
-  const federal = data.grants.filter((grant) => grant.opportunity.source === "grants-gov").length;
-  const prospects = data.grants.filter((grant) => grant.opportunity.source === "irs-990pf").length;
-  const total = data.totalResultCount ?? data.resultCount;
+  const federal = visibleGrants.filter((grant) => grant.opportunity.source === "grants-gov").length;
+  const prospects = visibleGrants.filter((grant) => grant.opportunity.source === "irs-990pf").length;
+  const loaded = data.grants.length;
 
   return (
     <section className="control-bar">
@@ -73,7 +75,7 @@ export function ControlBar({
         </div>
         <div className="control-stats" aria-label="Search result counts">
           <div>
-            <strong>{data.grants.length}/{total}</strong>
+            <strong>{visibleGrants.length}/{loaded}</strong>
             <span>loaded</span>
           </div>
           <i />

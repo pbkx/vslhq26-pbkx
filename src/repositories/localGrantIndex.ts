@@ -26,6 +26,13 @@ const topicRules:[RegExp,string][]=[
  [/\b(apprenticeship|credential|certification)\b/i,"career pathways"],
  [/\b(entrepreneurship|small business)\b/i,"entrepreneurship"],
  [/\b(science|technology|engineering|mathematics|stem)\b/i,"STEM education"],
+ [/\b(food security(?! act)|food insecurity|hunger relief|hunger|food pantry|food cupboard|food bank|emergency food|food distribution|food programs? support|free meals?|hot meals?|thanksgiving meals?|community meals?|groceries|food rescue|food waste)\b/i,"food security"],
+ [/\b(nutrition assistance|nutrition access|healthy food|food access)\b/i,"nutrition access"],
+ [/\b(homelessness|homeless|housing stability|emergency shelter|affordable housing)\b/i,"housing stability"],
+ [/\b(community health|health access|public health|mental health)\b/i,"community health"],
+ [/\b(community arts|arts education|cultural preservation)\b/i,"community arts"],
+ [/\b(environmental conservation|climate resilience|sustainability)\b/i,"environmental conservation"],
+ [/\b(youth development|afterschool|after-school|child and family services)\b/i,"youth development"],
 ];
 const populationRules:[RegExp,string][]=[
  [/\b(low-income|low income|economically disadvantaged)\b/i,"low-income people"],
@@ -36,6 +43,10 @@ const populationRules:[RegExp,string][]=[
  [/\b(women|girls)\b/i,"women and girls"],
  [/\b(youth|young adults?)\b/i,"youth and young adults"],
  [/\b(rural|tribal|native american|american indian)\b/i,"rural or Tribal communities"],
+ [/\b(hungry|food insecure|food-insecure)\b/i,"people experiencing food insecurity"],
+ [/\b(homeless|unhoused|housing insecure)\b/i,"people experiencing homelessness"],
+ [/\b(seniors?|older adults?)\b/i,"older adults"],
+ [/\b(immigrants?|refugees?)\b/i,"immigrants and refugees"],
 ];
 const inferred=(text:string,rules:[RegExp,string][])=>rules.filter(([pattern])=>pattern.test(text)).map(([,label])=>label);
 const eligibilityCodes:Record<string,string>={
@@ -126,24 +137,39 @@ export class LocalGrantIndex{
    return row?mapFederal(row):null;
   }finally{db.close()}
  }
- searchPrivateProspects(query:string|undefined,limit:number,preferredStates:string[]=[]){
+ searchPrivateProspects(
+  query:string|undefined,
+  limit:number,
+  preferredStates:string[]=[],
+  awardRange:{minimum?:number;maximum?:number}={},
+ ){
   if(!this.isAvailable())return[];
   const db=this.open();
   try{
    const terms=safeTerms(query);
    if(!terms.length)return[];
    const normalizedStates=[...new Set(preferredStates.map(state=>state.toUpperCase()))];
+   const awardClauses=[
+    awardRange.minimum!==undefined?"p.amount >= ?":"",
+    awardRange.maximum!==undefined?"p.amount <= ?":"",
+   ].filter(Boolean);
+   const awardWhere=awardClauses.length?` AND ${awardClauses.join(" AND ")}`:"";
+   const awardParams=[
+    ...(awardRange.minimum!==undefined?[awardRange.minimum]:[]),
+    ...(awardRange.maximum!==undefined?[awardRange.maximum]:[]),
+   ];
    const stateOrder=normalizedStates.length
     ?`CASE WHEN UPPER(COALESCE(p.recipient_state,'')) IN (${normalizedStates.map(()=>"?").join(",")}) THEN 0 ELSE 1 END,`
     :"";
    const rows=db.prepare(`
     SELECT p.* FROM private_funder_prospects_fts
     JOIN private_funder_prospects p ON p.id=private_funder_prospects_fts.rowid
-    WHERE private_funder_prospects_fts MATCH ?
+    WHERE private_funder_prospects_fts MATCH ?${awardWhere}
     ORDER BY ${stateOrder} bm25(private_funder_prospects_fts), p.amount DESC
     LIMIT ?
    `).all(
     ftsExpression(terms),
+    ...awardParams,
     ...normalizedStates,Math.max(limit*100,500)
    ) as any[];
    const candidateGroups=new Map<string,any[]>();
@@ -152,11 +178,11 @@ export class LocalGrantIndex{
    const expandedRows=selectedKeys.length?db.prepare(`
     SELECT p.* FROM private_funder_prospects_fts
     JOIN private_funder_prospects p ON p.id=private_funder_prospects_fts.rowid
-    WHERE private_funder_prospects_fts MATCH ?
+    WHERE private_funder_prospects_fts MATCH ?${awardWhere}
       AND COALESCE(NULLIF(p.ein,''),p.foundation_name) IN (${selectedKeys.map(()=>"?").join(",")})
     ORDER BY bm25(private_funder_prospects_fts), p.amount DESC
     LIMIT ?
-   `).all(ftsExpression(terms),...selectedKeys,Math.max(limit*250,2_500)) as any[]:[];
+   `).all(ftsExpression(terms),...awardParams,...selectedKeys,Math.max(limit*250,2_500)) as any[]:[];
    const groups=new Map<string,any[]>(selectedKeys.map(key=>[key,[]]));
    for(const row of expandedRows){const key=String(row.ein||row.foundation_name);groups.get(key)?.push(row)}
    return selectedKeys.map((key):[string,any[]]=>[key,groups.get(key)?.length?groups.get(key)!:candidateGroups.get(key)!]).map(([key,grants]):GrantOpportunity=>{

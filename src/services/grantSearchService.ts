@@ -70,6 +70,18 @@ export function buildRetrievalQueries(input:Pick<SearchInput,"query"|"organizati
   add("adult education");
  if(includesAny(profileText,["low income","low-income","underserved","economic mobility"]))
   add("low income adults","underserved workers","economic opportunity","employment services","adult workforce");
+ if(includesAny(profileText,["food security","food insecurity","free food","hunger","food pantry","food bank","meal distribution","nutrition access"]))
+  add("food security","food insecurity","hunger","hunger relief","food","free meals","groceries","food distribution","emergency food assistance","food pantry","community meals","nutrition assistance","food access");
+ if(includesAny(profileText,["housing stability","homelessness","homeless","emergency shelter","affordable housing"]))
+  add("housing stability","homelessness prevention","emergency shelter","affordable housing");
+ if(includesAny(profileText,["community health","health access","public health","mental health"]))
+  add("community health","health access","public health","mental health services");
+ if(includesAny(profileText,["community arts","arts education","cultural preservation"]))
+  add("community arts","arts education","cultural preservation");
+ if(includesAny(profileText,["environmental conservation","climate resilience","sustainability"]))
+  add("environmental conservation","climate resilience","sustainability");
+ if(includesAny(profileText,["youth development","child and family services","out-of-school learning"]))
+  add("youth development","child and family services","afterschool");
 
  add(...input.project.topics,...input.organization.missionTopics);
  const usefulQueryTerms=normalize(input.query??"").split(" ")
@@ -130,7 +142,7 @@ export function inferResultTypes(query?:string):GrantResultType[]|undefined{
 export function inferRequestedResultCount(query?:string){
  if(!query)return undefined;
  const text=query.replace(/,/g," ");
- const match=text.match(/\b(?:find|show|list|return|give\s+me|top)\s+(?:the\s+)?(\d{1,4})\s+(?:matching\s+|best\s+|ranked\s+)?grants?\b/i)
+ const match=text.match(/\b(?:find|show|list|return|give\s+me|top)\s+(?:the\s+)?(\d{1,4})\b(?=[^$\n]{0,48}\bgrants?\b)/i)
   ??text.match(/\b(\d{1,4})\s+(?:matching\s+|best\s+|ranked\s+)?grants?\b/i);
  if(!match)return undefined;
  const count=Number(match[1]);
@@ -184,10 +196,11 @@ export async function searchGrants(input:SearchInput):Promise<SearchOutput>{
   topics:input.project.topics,mission:input.organization.missionTopics,
  })).digest("hex");
  const candidateLimit=Math.min(420,Math.max(300,limit*30));
- const cached=await grantCache.getOrLoad<GrantOpportunity[]>(`search:v5:${key}`,3_600_000,async()=>{
+ const cached=await grantCache.getOrLoad<GrantOpportunity[]>(`search:v11:${key}`,3_600_000,async()=>{
   const settled=await Promise.all(providers.filter(provider=>sources.includes(provider.source)).map(async provider=>{
    try{return await provider.search({
     query:input.query,searchQueries,preferredStates,limit:candidateLimit,
+    minimumAward:filters.minimumAward,maximumAward:filters.maximumAward,
    })}
    catch{
     warnings.push(`${provider.source} was unavailable; other sources are still shown.`);
@@ -230,13 +243,19 @@ export async function searchGrants(input:SearchInput):Promise<SearchOutput>{
  ));
  const ranked=scored
  .filter(grant=>grant.score.overallScore>=(filters.minimumScore??0))
-  // A good budget/geography score must not allow an unrelated program to lead.
-  .filter(grant=>grant.score.components.missionAlignment.score>=(grant.opportunity.source==="irs-990pf"?10:20))
+  // Budget, geography, or historical award size can never compensate for an
+  // unrelated mission. Return fewer records rather than pad the result set.
+  .filter(grant=>grant.score.components.missionAlignment.score>=45)
+  // IRS records are only prospect evidence. When the user names a state,
+  // require matched historical giving in that state rather than presenting
+  // an out-of-region foundation as a plausible local prospect.
+  .filter(grant=>grant.opportunity.source!=="irs-990pf"||!preferredStates.length||
+   grant.opportunity.eligibleLocations.some(area=>area.states?.some(state=>preferredStates.includes(state.toUpperCase()))))
   // Explicit applicant conflicts are evidence, but not actionable primary
   // recommendations for this organization.
   .filter(grant=>grant.opportunity.source==="irs-990pf"||grant.score.eligibilityStatus!=="likely-ineligible")
   .sort((a,b)=>{
-   const tier=(grant:GrantResult)=>grant.score.components.missionAlignment.score>=(grant.opportunity.source==="irs-990pf"?25:45)?1:0;
+   const tier=(grant:GrantResult)=>grant.score.components.missionAlignment.score>=65?1:0;
    return tier(b)-tier(a)||b.score.overallScore-a.score.overallScore;
   });
  const grants=balancedResults(ranked,limit,sources);
@@ -245,6 +264,8 @@ export async function searchGrants(input:SearchInput):Promise<SearchOutput>{
  const privateCount=grants.filter(item=>item.opportunity.source==="irs-990pf").length;
  if(!federalCount&&sources.includes("grants-gov"))
   warnings.push("No sufficiently mission-aligned current federal opportunity was found in the requested award range.");
+ if(grants.length<limit)
+  warnings.push(`Only ${grants.length} sufficiently relevant record${grants.length===1?"":"s"} matched; GrantPilot excluded unrelated results instead of padding the requested ${limit}.`);
  if(privateCount){
   warnings.push(`${privateCount} result${privateCount===1?" is":"s are"} historical IRS 990-PF prospect evidence, not confirmed open applications.`);
   const privateWithPreferredHistory=grants.filter(item=>item.opportunity.source==="irs-990pf"&&

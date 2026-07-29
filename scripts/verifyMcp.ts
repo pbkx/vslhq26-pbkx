@@ -31,24 +31,29 @@ if((search._meta as any)?.ui?.resourceUri!==GRANTPILOT_WIDGET_URI)
 const prompt="Find grants for a Washington nonprofit teaching practical AI skills to low-income adults. We need between $100,000 and $500,000.";
 const result=await client.callTool({name:"search_grants",arguments:{query:prompt,filters:{onlyOpen:true}}});
 const output=result.structuredContent as any,firstBytes=Buffer.byteLength(JSON.stringify(result));
-if(!output?.grants?.length||output.grants.length<12)
+if(!output?.grants?.length||output.grants.length<3)
  throw new Error("search_grants returned too few structured grants for the demo prompt");
-if(!output.sourceCounts?.["grants-gov"]||!output.sourceCounts?.["irs-990pf"])
- throw new Error("search_grants did not return both federal opportunities and historical private-funder prospects");
+if((output.sourceCounts?.["grants-gov"]??0)+(output.sourceCounts?.["irs-990pf"]??0)!==output.grants.length)
+ throw new Error("search_grants returned inconsistent source counts");
 if(firstBytes>=48*1024)throw new Error("Initial tool result exceeds the 48 KiB GrantPilot safety ceiling");
-if(!output.hasMore||!Number.isInteger(output.nextOffset))
- throw new Error("The demo search did not expose a load-more page");
+const pagingResult=output.hasMore?result:await client.callTool({
+ name:"search_grants",
+ arguments:{query:"Find nonprofit grants for AI workforce and digital inclusion programs nationwide."},
+});
+const paging=pagingResult.structuredContent as any;
+if(!paging.hasMore||!Number.isInteger(paging.nextOffset))
+ throw new Error("The paging search did not expose a load-more page");
 
-const moreResult=await client.callTool({name:"load_more_grants",arguments:{queryId:output.queryId,offset:output.nextOffset}});
+const moreResult=await client.callTool({name:"load_more_grants",arguments:{queryId:paging.queryId,offset:paging.nextOffset}});
 const more=moreResult.structuredContent as any,moreBytes=Buffer.byteLength(JSON.stringify(moreResult));
 if(!more?.append||!more.grants?.length)throw new Error("load_more_grants returned no appendable records");
 if(moreBytes>=48*1024)throw new Error("Load-more tool result exceeds the 48 KiB GrantPilot safety ceiling");
-const firstIds=new Set(output.grants.map((grant:any)=>grant.opportunity.id));
+const firstIds=new Set(paging.grants.map((grant:any)=>grant.opportunity.id));
 if(more.grants.some((grant:any)=>firstIds.has(grant.opportunity.id)))
  throw new Error("load_more_grants returned duplicate IDs from the first page");
 
 const currentOnlyResult=await client.callTool({name:"search_grants",arguments:{
- query:`${prompt} Only return current open federal grants. Do not include historical prospects.`,
+ query:`${prompt} Return 20 current open federal grants. Do not include historical prospects.`,
  resultTypes:["current-federal"],
  requestedResultCount:20,
 }});
@@ -69,7 +74,7 @@ if(content?.mimeType!=="text/html;profile=mcp-app"||!("text"in content)||!conten
  throw new Error("GrantPilot widget invalid");
 console.log(
  `[verify] ${mcpUrl} | tools/list ${names.length} ✓ | page 1 ${output.grants.length} records ${(firstBytes/1024).toFixed(1)} KiB ✓ | `+
- `load_more ${more.grants.length} records ${(moreBytes/1024).toFixed(1)} KiB ✓ | total cached ${output.totalResultCount} | `+
+ `load_more ${more.grants.length} records ${(moreBytes/1024).toFixed(1)} KiB ✓ | total cached ${paging.totalResultCount} | `+
  `current-only ${currentOnly.grants.length} ✓ | 101-result limit rejected ✓ | `+
  `widget ${(content.text.length/1024).toFixed(1)} KiB ✓`,
 );

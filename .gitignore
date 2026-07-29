@@ -4,4 +4,5 @@ cache/grants/
 data/raw/
 data/index/
 .env
+env/.env.*.user
 *.log

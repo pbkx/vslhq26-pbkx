@@ -6,6 +6,13 @@ const synonymGroups=[
  ["artificial intelligence","ai","ai literacy","machine learning","responsible ai"],
  ["adult education","adult learning","community learning","continuing education"],
  ["low income","low-income","economically disadvantaged","underserved"],
+ ["food security","food insecurity","hunger relief","hunger","food pantry","food cupboard","food bank","emergency food assistance","food distribution","free meals","groceries","meal distribution","community meals","food access"],
+ ["nutrition access","nutrition assistance","healthy food","nutrition services"],
+ ["housing stability","homelessness prevention","emergency shelter","affordable housing","homeless services"],
+ ["community health","health access","public health","mental health services"],
+ ["community arts","arts education","cultural preservation"],
+ ["environmental conservation","climate resilience","sustainability"],
+ ["youth development","afterschool","child and family services"],
 ];
 const words=(value:string)=>value.toLowerCase().replace(/[^a-z0-9 ]/g," ").split(/\s+/).filter(x=>x.length>2&&!["and","the","for","with","from"].includes(x));
 const expand=(terms:string[])=>{
@@ -19,11 +26,17 @@ const conceptPatterns:[string,RegExp][]=[
  ["workforce and careers",/\b(workforce|employment training|job training|career pathways?|career readiness|economic mobility|upskilling|reskilling|job placement)\b/i],
  ["adult learning",/\b(adult education|adult learning|adult learners?|continuing education)\b/i],
  ["economic inclusion",/\b(low-income|low income|underserved|disadvantaged|digital inclusion|digital equity|economic opportunity)\b/i],
+ ["food access and hunger relief",/\b(food security|food insecurity|free food|free meals?|hot meals?|thanksgiving meals?|groceries|hunger|food pantry|food cupboard|food bank|emergency food|food distribution|meal distribution|community meals?|food rescue|food waste|nutrition assistance|nutrition access)\b/i],
+ ["housing stability",/\b(housing stability|homelessness|homeless|emergency shelter|affordable housing)\b/i],
+ ["community health",/\b(community health|health access|public health|mental health)\b/i],
+ ["arts and culture",/\b(community arts|arts education|cultural preservation)\b/i],
+ ["environmental resilience",/\b(environmental conservation|climate resilience|sustainability)\b/i],
+ ["youth development",/\b(youth development|afterschool|after-school|child and family services)\b/i],
 ];
 const concepts=(values:string[])=>new Set(conceptPatterns.filter(([,pattern])=>pattern.test(values.join(" "))).map(([name])=>name));
 const conceptCoverage=(project:Set<string>,opportunity:Set<string>)=>project.size?100*[...project].filter(value=>opportunity.has(value)).length/project.size:50;
 const sectorPatterns:[string,RegExp][]=[
- ["agriculture or food systems",/\b(agriculture|agricultural|food sciences?|farming|crop|livestock)\b/i],
+ ["agricultural production or food science",/\b(agriculture|agricultural|food sciences?|farming|crop|livestock)\b/i],
  ["clinical or health research",/\b(clinical|biomedical|medical research|health research|disease|cancer|hiv|patient care|family planning)\b/i],
  ["defense or military research",/\b(naval|military|department of defen[cs]e|dod|defen[cs]e research|warfighting|army research|air force research)\b/i],
  ["international public diplomacy",/\b(embassy|u\.?s\.? mission|public diplomacy|foreign affairs|international exchange|egypt|philippines|algeria|lebanon|vietnam|uganda|south asia|ukraine|syria)\b/i],
@@ -76,12 +89,18 @@ export function scoreGrant(grant:GrantOpportunity,org:OrganizationProfile,projec
  const projectText=[project.title,project.summary,...project.topics,...org.missionTopics].join(" ");
  const grantText=[grant.title,grant.summary,grant.funderName,...grant.missionTopics].join(" ");
  const sectorMismatches=sectorPatterns.filter(([,pattern])=>pattern.test(grantText)&&!pattern.test(projectText)).map(([name])=>name);
- const sectorPenalty=Math.min(44,sectorMismatches.length*22);
+ const sectorPenalty=Math.min(70,sectorMismatches.length*50);
  const missionScore=clamp(topic*.20+mission*.10+population*.15+text*.10+coverage*.45-sectorPenalty);
+ const requestedConcepts=[...projectConcepts];
  const applicantText=grant.eligibleApplicantTypes.join(" ").toLowerCase(),orgType=org.organizationType.toLowerCase();
+ const fullApplicantText=[grant.summary,...grant.eligibleApplicantTypes,...grant.requirements.map(requirement=>requirement.text)].join(" ").toLowerCase();
+ const namedExclusive=/\b(only (?:the )?following applicant|only .{0,100} (?:is|are) eligible|single[- ]source funding|non-competitive .{0,80} available to|available only to)\b/i.test(fullApplicantText);
+ const normalizedOrgName=org.name.toLowerCase().replace(/[^a-z0-9 ]/g," ").trim();
+ const genericOrgName=/^(new york |washington |california )?nonprofit( organization)?$|^user organization$/.test(normalizedOrgName);
+ const exclusiveMatchesOrganization=!genericOrgName&&normalizedOrgName.length>5&&fullApplicantText.includes(normalizedOrgName);
  const applicantSupported=applicantText.includes(orgType)||applicantText.includes("501")||applicantText.includes("unrestricted");
  const applicantUncertain=!applicantText||applicantText.includes("other applicants")||applicantText.includes("review the additional");
- const explicitlyExcluded=!privateProspect&&!applicantSupported&&!applicantUncertain;
+ const explicitlyExcluded=!privateProspect&&((namedExclusive&&!exclusiveMatchesOrganization)||(!applicantSupported&&!applicantUncertain));
  const applicantScore=privateProspect?50:explicitlyExcluded?0:applicantSupported?100:50;
  const projectStates=project.geographicAreas.flatMap(x=>x.states??[]),eligibleStates=grant.eligibleLocations.flatMap(x=>x.states??[]),nationwide=grant.eligibleLocations.some(x=>x.nationwide);
  const historicalStateMatch=projectStates.some(x=>eligibleStates.includes(x));
@@ -89,14 +108,14 @@ export function scoreGrant(grant:GrantOpportunity,org:OrganizationProfile,projec
  const budget=project.estimatedBudget,min=grant.awardMin,max=grant.awardMax;let sizeScore=60;if(budget!==undefined&&(min!==undefined||max!==undefined)){if((min===undefined||budget>=min)&&(max===undefined||budget<=max))sizeScore=100;else{const boundary=budget<(min??0)?min!:max!;sizeScore=clamp(100-Math.abs(budget-boundary)/boundary*100)}}
  const days=daysUntil(grant.deadline);let deadline=privateProspect?50:deadlineScore(days,org.applicationCapacity);if(grant.requiresCostShare)deadline-=10;if(grant.requirements.some(r=>r.category==="partnership"))deadline-=10;if(grant.requirements.some(r=>r.category==="registration")&&org.registrations?.samGov!=="active")deadline-=10;
  const components={
-  missionAlignment:component(missionScore,weights.missionAlignment,90,[`${Math.round(coverage)}% coverage across the project's AI/digital, workforce, adult-learning, and economic-inclusion concepts.`,`${Math.round(topic)}% project-topic overlap with the opportunity.`,...(sectorMismatches.length?[`Potential sector mismatch: ${sectorMismatches.join(", ")}.`]:[])],[evidence("project","topics",project.topics.join(", ")),evidence("opportunity","missionTopics",grant.missionTopics.join(", "))],[]),
+  missionAlignment:component(missionScore,weights.missionAlignment,90,[`${Math.round(coverage)}% coverage across the requested mission concepts${requestedConcepts.length?`: ${requestedConcepts.join(", ")}`:""}.`,`${Math.round(topic)}% project-topic overlap with the opportunity.`,...(sectorMismatches.length?[`Potential sector mismatch: ${sectorMismatches.join(", ")}.`]:[])],[evidence("project","topics",project.topics.join(", ")),evidence("opportunity","missionTopics",grant.missionTopics.join(", "))],[]),
   applicantEligibility:component(applicantScore,weights.applicantEligibility,privateProspect?25:grant.eligibleApplicantTypes.length?95:45,[privateProspect?"Historical IRS giving does not establish current applicant eligibility.":explicitlyExcluded?"Applicant type conflicts with the stated eligible categories.":"Nonprofit applicant type is supported or not explicitly excluded."],[evidence("organization","organizationType",org.organizationType),evidence("opportunity","eligibleApplicantTypes",grant.eligibleApplicantTypes.join(", "))],privateProspect?["Current application eligibility is unknown."]:grant.eligibleApplicantTypes.length?[]:["Detailed applicant categories are missing."]),
   geographicFit:component(
    geoScore,weights.geographicFit,
    privateProspect?(eligibleStates.length?55:25):eligibleStates.length||nationwide?95:40,
    [privateProspect
     ?historicalStateMatch?"Historical IRS records include giving to the project's state; this is not a current eligibility rule.":"Historical recipient geography does not establish current geographic eligibility."
-    :geoScore>=90?"Washington project geography is supported.":"Geographic eligibility needs review."],
+    :geoScore>=90?`${projectStates.length?projectStates.join("/"):"Requested"} project geography is supported.`:"Geographic eligibility needs review."],
    [evidence("project","geography",projectStates.join(", ")),evidence("opportunity","eligibleLocations",eligibleStates.join(", ")||"Not specified")],
    privateProspect?["Current geographic eligibility is unknown."]:eligibleStates.length||nationwide?[]:["Eligible states were not specified."]
   ),

@@ -29,7 +29,7 @@ export function RankedStrip({
         <p>Select a row to update every view</p>
       </div>
       <div className="ranked-list">
-        {grants.slice(0, 30).map((grant, index) => {
+        {grants.map((grant, index) => {
           const kind = eligibilityKind(grant.score.eligibilityStatus);
           return (
             <div className={`ranked-row ${grant.opportunity.id === selectedId ? "selected" : ""}`} key={grant.opportunity.id}>

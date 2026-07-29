@@ -88,7 +88,7 @@ function MatchMatrix({ grants, selectedId, onSelect }: Omit<Props, "view" | "con
   const active = grants.find((grant) => grant.opportunity.id === hoverId);
 
   return (
-    <section className="visual-card original-visual">
+    <section className="visual-card original-visual matrix-visual">
       <ChartHeader title="Match Matrix" subtitle="Match score vs. application effort · bubble size = award amount">
         <div className="legend original-legend">
           <span><i className="federal" />Grants.gov</span>
@@ -165,7 +165,7 @@ function AwardFit({ grants, selectedId, onSelect }: Omit<Props, "view">) {
   const pct = (value: number) => Math.min(100, (Math.max(0, value) / AWARD_DOMAIN_MAX) * 100);
 
   return (
-    <section className="visual-card original-visual award-fit-visual">
+    <section className="visual-card original-visual award-fit-visual content-fit-visual">
       <ChartHeader title="Award Fit" subtitle="Award ranges vs. your $100K–$500K target band">
         <SelectControl
           value={sort}
@@ -260,7 +260,7 @@ function ScoreHeatmap({ grants, selectedId, onSelect }: Omit<Props, "view" | "co
     [grants, sortKey],
   );
   return (
-    <section className="visual-card original-visual">
+    <section className="visual-card original-visual heatmap-visual content-fit-visual">
       <ChartHeader title="Score Heatmap" subtitle="Click a heading to sort · click a cell for detail">
         <div className="original-heat-scale">
           <span><i className="low" />0–39</span>
@@ -359,7 +359,7 @@ function Deadlines({ grants, selectedId, onSelect }: Omit<Props, "view" | "conte
   const historical = grants.filter((grant) => grant.opportunity.source === "irs-990pf");
 
   return (
-    <section className="visual-card original-visual">
+    <section className="visual-card original-visual deadlines-visual content-fit-visual">
       <ChartHeader title="Deadlines" subtitle="Current federal opportunities over the next 12 months · marker size = award, color = match" />
       <div className="original-deadlines">
         <p className="deadline-lane-label">Open federal opportunities</p>

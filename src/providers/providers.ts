@@ -7,6 +7,8 @@ export type OpportunitySearchQuery={
  query?:string;
  searchQueries?:string[];
  preferredStates?:string[];
+ minimumAward?:number;
+ maximumAward?:number;
  sources?:GrantSource[];
  limit:number;
 };
@@ -90,11 +92,13 @@ export class Irs990PfProspectProvider implements OpportunityProvider{
   // IRS index CSV is staged. Until then, clearly labeled demo prospects may be
   // enabled for hackathon continuity.
   const queries=query.searchQueries?.length?query.searchQueries:[query.query].filter((value):value is string=>Boolean(value));
-  const perQuery=Math.max(20,Math.ceil(query.limit/Math.max(queries.length,1)));
+  const perQuery=Math.max(100,Math.ceil(query.limit/Math.max(queries.length,1)));
   const indexed=[...new Map(
-   queries.flatMap(value=>localGrantIndex.searchPrivateProspects(value,perQuery,query.preferredStates))
+   queries.flatMap(value=>localGrantIndex.searchPrivateProspects(value,perQuery,query.preferredStates,{
+    minimum:query.minimumAward,maximum:query.maximumAward,
+   }))
     .map(item=>[item.id,item] as const)
-  ).values()].slice(0,query.limit);
+  ).values()].slice(0,Math.min(2_000,query.limit*5));
   if(indexed.length)return indexed;
   if(process.env.DEMO_IRS_PROSPECTS==="false")return[];
   return this.fallback.search(query);

@@ -123,25 +123,27 @@ export default function App() {
 
   return (
     <main className="app-shell">
-      <ControlBar data={data} view={view} onViewChange={setView} filters={filters} onFiltersChange={setFilters} />
+      <ControlBar
+        data={data}
+        view={view}
+        onViewChange={setView}
+        filters={filters}
+        onFiltersChange={setFilters}
+        visibleGrants={filtered}
+      />
       <div className="workspace">
         <Visualization view={view} grants={filtered} selectedId={selected.opportunity.id} onSelect={setSelectedId} context={data.context} />
         <SelectedPanel
           grant={selected}
           inComparison={comparison.has(selected.opportunity.id)}
+          comparisonCount={comparison.size}
           onToggleComparison={() => toggleComparison(selected.opportunity.id)}
+          onCompareSelected={showComparison}
           onOpenSource={() => openLink(selected.opportunity.applicationUrl ?? selected.opportunity.sourceUrl).catch((error) => setNotice(error.message))}
-          onAskCopilot={() => followUp(`Explain the largest eligibility risks and next verification steps for ${selected.opportunity.title}. Use only the GrantPilot evidence returned for this grant.`).catch((error) => setNotice(error.message))}
+          onAskCopilot={() => followUp(`Tell me more about ${selected.opportunity.title}. Explain why it matches, the main eligibility concern, geographic evidence, score breakdown, and next verification steps. Use only the GrantPilot evidence returned for this grant.`).catch((error) => setNotice(error.message))}
           onCreateWatch={createWatch}
         />
       </div>
-      {comparison.size > 0 && (
-        <div className="compare-dock">
-          <span><b>{comparison.size}</b> selected for comparison</span>
-          <button disabled={comparison.size < 2} onClick={showComparison}>Compare side by side</button>
-          <button onClick={() => { setComparison(new Set()); setComparisonOpen(false); }}>Clear</button>
-        </div>
-      )}
       {comparisonOpen && <ComparisonTray grants={compared} onClose={() => setComparisonOpen(false)} />}
       <RankedStrip
         grants={filtered}
