@@ -11,6 +11,7 @@ import {
   sourceLabel,
   type ViewId,
 } from "../grantView";
+import { SelectControl } from "./SelectControl";
 
 type Props = {
   view: ViewId;
@@ -41,27 +42,22 @@ function ChartHeader({ title, subtitle, children }: { title: string; subtitle: s
   );
 }
 
-function GrantPopover({
+function GrantHoverCard({
   grant,
   note,
-  onClose,
   point,
 }: {
   grant: GrantResult;
   note?: string;
-  onClose: () => void;
-  point?: { x: number; y: number };
+  point: { x: number; y: number };
 }) {
   const kind = eligibilityKind(grant.score.eligibilityStatus);
-  const style = point
-    ? {
-        left: `${Math.max(22, Math.min(78, point.x))}%`,
-        top: `${Math.max(38, Math.min(82, point.y))}%`,
-      }
-    : undefined;
+  const style = {
+    left: `${Math.max(22, Math.min(78, point.x))}%`,
+    top: `${Math.max(38, Math.min(82, point.y))}%`,
+  };
   return (
-    <aside className={`grant-chart-popover ${point ? "point-popover" : "floating-popover"}`} style={style}>
-      <button type="button" className="popover-close" aria-label="Close grant details" onClick={onClose}>×</button>
+    <aside className="grant-chart-popover point-popover" style={style} role="tooltip">
       <strong>{grant.opportunity.title}</strong>
       <p>{grant.opportunity.funderName}</p>
       <dl>
@@ -85,17 +81,11 @@ function awardRadius(grant: GrantResult) {
 
 function MatchMatrix({ grants, selectedId, onSelect }: Omit<Props, "view" | "context">) {
   const [hoverId, setHoverId] = useState<string | null>(null);
-  const [pinnedId, setPinnedId] = useState<string | null>(null);
   const plotWidth = 100 - MATRIX_PAD.left - MATRIX_PAD.right;
   const plotHeight = 100 - MATRIX_PAD.top - MATRIX_PAD.bottom;
   const x = (effort: number) => MATRIX_PAD.left + (effort / 100) * plotWidth;
   const y = (score: number) => MATRIX_PAD.top + (1 - score / 100) * plotHeight;
-  const active = grants.find((grant) => grant.opportunity.id === (hoverId ?? pinnedId));
-
-  function choose(id: string) {
-    onSelect(id);
-    setPinnedId((current) => current === id ? null : id);
-  }
+  const active = grants.find((grant) => grant.opportunity.id === hoverId);
 
   return (
     <section className="visual-card original-visual">
@@ -132,11 +122,9 @@ function MatchMatrix({ grants, selectedId, onSelect }: Omit<Props, "view" | "con
                 width: radius * 2,
                 height: radius * 2,
               }}
-              onClick={() => choose(grant.opportunity.id)}
+              onClick={() => onSelect(grant.opportunity.id)}
               onMouseEnter={() => setHoverId(grant.opportunity.id)}
               onMouseLeave={() => setHoverId((current) => current === grant.opportunity.id ? null : current)}
-              onFocus={() => setHoverId(grant.opportunity.id)}
-              onBlur={() => setHoverId((current) => current === grant.opportunity.id ? null : current)}
               aria-label={`${grant.opportunity.title}, ${grant.score.overallScore} match score`}
             >
               <span />
@@ -145,11 +133,10 @@ function MatchMatrix({ grants, selectedId, onSelect }: Omit<Props, "view" | "con
           );
         })}
         {active && (
-          <GrantPopover
+          <GrantHoverCard
             grant={active}
             point={{ x: x(active.chart.applicationEffort), y: y(active.score.overallScore) }}
             note={active.opportunity.source === "irs-990pf" ? "Historical prospect — not a confirmed open opportunity" : undefined}
-            onClose={() => { setPinnedId(null); setHoverId(null); }}
           />
         )}
       </div>
@@ -158,10 +145,14 @@ function MatchMatrix({ grants, selectedId, onSelect }: Omit<Props, "view" | "con
 }
 
 type AwardSort = "score" | "award" | "title";
+const AWARD_SORT_OPTIONS = [
+  { value: "score", label: "Sort: Match score" },
+  { value: "award", label: "Sort: Award size" },
+  { value: "title", label: "Sort: Title" },
+];
 
 function AwardFit({ grants, selectedId, onSelect }: Omit<Props, "view">) {
   const [sort, setSort] = useState<AwardSort>("score");
-  const [pinnedId, setPinnedId] = useState<string | null>(null);
   const rows = useMemo(() => {
     const copy = [...grants];
     if (sort === "score") copy.sort((a, b) => b.score.overallScore - a.score.overallScore);
@@ -171,75 +162,81 @@ function AwardFit({ grants, selectedId, onSelect }: Omit<Props, "view">) {
       (a.opportunity.awardMax ?? a.opportunity.awardMin ?? 0));
     return copy;
   }, [grants, sort]);
-  const active = grants.find((grant) => grant.opportunity.id === pinnedId);
   const pct = (value: number) => Math.min(100, (Math.max(0, value) / AWARD_DOMAIN_MAX) * 100);
 
-  function choose(id: string) {
-    onSelect(id);
-    setPinnedId((current) => current === id ? null : id);
-  }
-
   return (
-    <section className="visual-card original-visual">
+    <section className="visual-card original-visual award-fit-visual">
       <ChartHeader title="Award Fit" subtitle="Award ranges vs. your $100K–$500K target band">
-        <select className="chart-sort" value={sort} onChange={(event) => setSort(event.target.value as AwardSort)}>
-          <option value="score">Sort: Match score</option>
-          <option value="award">Sort: Award size</option>
-          <option value="title">Sort: Title</option>
-        </select>
+        <SelectControl
+          value={sort}
+          options={AWARD_SORT_OPTIONS}
+          onValueChange={(value) => setSort(value as AwardSort)}
+          ariaLabel="Sort award fit"
+          className="chart-sort"
+        />
       </ChartHeader>
       <div className="original-award-board">
-        <div className="original-award-axis">
-          <span className="award-opportunity-label">Opportunity</span>
-          <div className="award-axis-track">
-            <i className="target-band" style={{ left: `${pct(TARGET_MIN)}%`, width: `${pct(TARGET_MAX) - pct(TARGET_MIN)}%` }} />
-            {AWARD_TICKS.map((tick) => <span key={tick} style={{ left: `${pct(tick)}%` }}>{formatMoney(tick)}</span>)}
-          </div>
-          <b>Score</b>
-        </div>
         <div className="original-award-scroll">
-          {rows.map((grant) => {
-            const minimum = grant.opportunity.awardMin ?? 0;
-            const maximum = grant.opportunity.awardMax ?? grant.opportunity.awardMin;
-            const unknown = grant.opportunity.awardMin === undefined && grant.opportunity.awardMax === undefined;
-            const single = maximum !== undefined && minimum === maximum;
-            const left = pct(minimum);
-            const right = pct(maximum ?? minimum);
-            return (
-              <button
-                key={grant.opportunity.id}
-                type="button"
-                className={`original-award-row ${grant.opportunity.id === selectedId ? "selected" : ""}`}
-                onClick={() => choose(grant.opportunity.id)}
-              >
-                <span className="award-row-name"><strong>{grant.opportunity.title}</strong><small>{grant.opportunity.funderName}</small></span>
-                <span className="original-award-track">
-                  <i className="target-band" style={{ left: `${pct(TARGET_MIN)}%`, width: `${pct(TARGET_MAX) - pct(TARGET_MIN)}%` }} />
-                  <i className="range-baseline" />
-                  {unknown ? (
-                    <em>Unknown</em>
-                  ) : single ? (
-                    <i className={`single-award ${grant.opportunity.source === "irs-990pf" ? "private" : "federal"}`} style={{ left: `${left}%` }} />
-                  ) : (
-                    <>
-                      <i className={`award-range-bar ${grant.opportunity.source === "irs-990pf" ? "private" : "federal"}`} style={{ left: `${left}%`, width: `${Math.max(right - left, 1)}%` }} />
-                      <i className={`award-endpoint ${grant.opportunity.source === "irs-990pf" ? "private" : "federal"}`} style={{ left: `${left}%` }} />
-                      <i className={`award-endpoint ${grant.opportunity.source === "irs-990pf" ? "private" : "federal"}`} style={{ left: `${right}%` }} />
-                    </>
-                  )}
-                </span>
-                <b className="award-row-score">{grant.score.overallScore}</b>
-              </button>
-            );
-          })}
+          <div className="original-award-axis">
+            <div className="award-opportunity-label">Opportunity</div>
+            <div className="award-axis-track">
+              <i className="target-band" style={{ left: `${pct(TARGET_MIN)}%`, width: `${pct(TARGET_MAX) - pct(TARGET_MIN)}%` }} />
+              {AWARD_TICKS.map((tick) => <span key={tick} style={{ left: `${pct(tick)}%` }}>{formatMoney(tick)}</span>)}
+            </div>
+          </div>
+          <ul className="original-award-rows">
+            {rows.map((grant) => {
+              const minimum = grant.opportunity.awardMin ?? 0;
+              const maximum = grant.opportunity.awardMax ?? grant.opportunity.awardMin;
+              const unknown = grant.opportunity.awardMin === undefined && grant.opportunity.awardMax === undefined;
+              const single = maximum !== undefined && minimum === maximum;
+              const left = pct(minimum);
+              const right = pct(maximum ?? minimum);
+              return (
+                <li key={grant.opportunity.id}>
+                  <button
+                    type="button"
+                    className={`original-award-row ${grant.opportunity.id === selectedId ? "selected" : ""}`}
+                    onClick={() => onSelect(grant.opportunity.id)}
+                  >
+                    <span className="award-row-name"><strong>{grant.opportunity.title}</strong><small>{grant.opportunity.funderName}</small></span>
+                    <span className="original-award-track">
+                      <i className="target-band" style={{ left: `${pct(TARGET_MIN)}%`, width: `${pct(TARGET_MAX) - pct(TARGET_MIN)}%` }} />
+                      <i className="range-baseline" />
+                      {unknown ? (
+                        <em>Unknown</em>
+                      ) : single ? (
+                        <i className={`single-award ${grant.opportunity.source === "irs-990pf" ? "private" : "federal"}`} style={{ left: `${left}%` }} />
+                      ) : (
+                        <>
+                          <i className={`award-range-bar ${grant.opportunity.source === "irs-990pf" ? "private" : "federal"}`} style={{ left: `${left}%`, width: `${Math.max(right - left, 1)}%` }} />
+                          <i className={`award-endpoint ${grant.opportunity.source === "irs-990pf" ? "private" : "federal"}`} style={{ left: `${left}%` }} />
+                          <i className={`award-endpoint ${grant.opportunity.source === "irs-990pf" ? "private" : "federal"}`} style={{ left: `${right}%` }} />
+                        </>
+                      )}
+                    </span>
+                    <b className="award-row-score">{grant.score.overallScore}</b>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
         </div>
-        {active && <GrantPopover grant={active} onClose={() => setPinnedId(null)} />}
       </div>
     </section>
   );
 }
 
 type HeatKey = "overall" | keyof Weights;
+const HEAT_HELP: Record<HeatKey, string> = {
+  overall: "Blended GrantPilot match score across all criteria.",
+  missionAlignment: "How closely the funder's giving matches your programs and mission.",
+  applicantEligibility: "Confidence that your organization meets applicant requirements.",
+  geographicFit: "Overlap between the funder's giving area and your service region.",
+  programSizeFit: "Fit between typical award size and your funding need.",
+  historicalSimilarity: "Similarity to previously funded organizations or projects.",
+  deadlineFeasibility: "Feasibility of the timeline for a competitive application.",
+};
 
 function heatValue(grant: GrantResult, key: HeatKey) {
   return key === "overall" ? grant.score.overallScore : grant.score.components[key]?.score ?? 0;
@@ -253,7 +250,7 @@ function heatStyle(value: number) {
 
 function ScoreHeatmap({ grants, selectedId, onSelect }: Omit<Props, "view" | "context">) {
   const [sortKey, setSortKey] = useState<HeatKey>("overall");
-  const [pinned, setPinned] = useState<{ id: string; key: HeatKey } | null>(null);
+  const [tooltip, setTooltip] = useState<{ id: string; key: HeatKey } | null>(null);
   const columns: { key: HeatKey; label: string }[] = [
     { key: "overall", label: "Overall" },
     ...SCORE_KEYS.map((key) => ({ key, label: SCORE_LABELS[key] })),
@@ -262,9 +259,6 @@ function ScoreHeatmap({ grants, selectedId, onSelect }: Omit<Props, "view" | "co
     () => [...grants].sort((a, b) => heatValue(b, sortKey) - heatValue(a, sortKey)),
     [grants, sortKey],
   );
-  const active = grants.find((grant) => grant.opportunity.id === pinned?.id);
-  const activeLabel = columns.find((column) => column.key === pinned?.key)?.label;
-
   return (
     <section className="visual-card original-visual">
       <ChartHeader title="Score Heatmap" subtitle="Click a heading to sort · click a cell for detail">
@@ -300,18 +294,28 @@ function ScoreHeatmap({ grants, selectedId, onSelect }: Omit<Props, "view" | "co
                 </th>
                 {columns.map((column) => {
                   const value = heatValue(grant, column.key);
+                  const isTooltipCell = tooltip?.id === grant.opportunity.id && tooltip.key === column.key;
                   return (
-                    <td key={column.key}>
+                    <td className="heat-cell" key={column.key}>
                       <button
                         type="button"
                         style={heatStyle(value)}
                         onClick={() => {
                           onSelect(grant.opportunity.id);
-                          setPinned((current) => current?.id === grant.opportunity.id && current.key === column.key ? null : { id: grant.opportunity.id, key: column.key });
+                          setTooltip({ id: grant.opportunity.id, key: column.key });
                         }}
+                        onMouseEnter={() => setTooltip({ id: grant.opportunity.id, key: column.key })}
+                        onMouseLeave={() => setTooltip((current) =>
+                          current?.id === grant.opportunity.id && current.key === column.key ? null : current)}
                       >
                         {Math.round(value)}
                       </button>
+                      {isTooltipCell && (
+                        <div className="heat-cell-tooltip" role="tooltip">
+                          <strong>{column.label}</strong>
+                          <span>{HEAT_HELP[column.key]}</span>
+                        </div>
+                      )}
                     </td>
                   );
                 })}
@@ -319,13 +323,6 @@ function ScoreHeatmap({ grants, selectedId, onSelect }: Omit<Props, "view" | "co
             ))}
           </tbody>
         </table>
-        {active && (
-          <GrantPopover
-            grant={active}
-            note={pinned?.key === "overall" ? "Overall deterministic match score" : `${activeLabel}: ${active.score.components[pinned!.key as keyof Weights]?.reasons[0] ?? "Review the evidence in the selected-grant panel."}`}
-            onClose={() => setPinned(null)}
-          />
-        )}
       </div>
     </section>
   );
@@ -355,20 +352,11 @@ function markerTone(score: number) {
 }
 
 function Deadlines({ grants, selectedId, onSelect }: Omit<Props, "view" | "context">) {
-  const [hoverId, setHoverId] = useState<string | null>(null);
-  const [pinnedId, setPinnedId] = useState<string | null>(null);
   const federal = grants
     .filter((grant) => grant.opportunity.source === "grants-gov" && grant.opportunity.deadline)
     .map((grant) => ({ grant, days: grant.chart.daysRemaining ?? 0 }))
     .filter(({ days }) => days >= 0 && days <= DEADLINE_HORIZON);
   const historical = grants.filter((grant) => grant.opportunity.source === "irs-990pf");
-  const active = grants.find((grant) => grant.opportunity.id === (hoverId ?? pinnedId));
-  const activeDays = active?.chart.daysRemaining ?? 0;
-
-  function choose(id: string) {
-    onSelect(id);
-    setPinnedId((current) => current === id ? null : id);
-  }
 
   return (
     <section className="visual-card original-visual">
@@ -397,22 +385,11 @@ function Deadlines({ grants, selectedId, onSelect }: Omit<Props, "view" | "conte
                 type="button"
                 className={`deadline-marker ${grant.opportunity.id === selectedId ? "selected" : ""}`}
                 style={{ left: `${deadlineX(days)}%`, width: size, height: size, background: markerTone(grant.score.overallScore) }}
-                onClick={() => choose(grant.opportunity.id)}
-                onMouseEnter={() => setHoverId(grant.opportunity.id)}
-                onMouseLeave={() => setHoverId((current) => current === grant.opportunity.id ? null : current)}
-                onFocus={() => setHoverId(grant.opportunity.id)}
-                onBlur={() => setHoverId((current) => current === grant.opportunity.id ? null : current)}
+                onClick={() => onSelect(grant.opportunity.id)}
                 aria-label={`${grant.opportunity.title}, due in ${days} days`}
               />
             );
           })}
-          {active?.opportunity.source === "grants-gov" && (
-            <GrantPopover
-              grant={active}
-              point={{ x: deadlineX(Math.max(0, Math.min(DEADLINE_HORIZON, activeDays))), y: 50 }}
-              onClose={() => { setPinnedId(null); setHoverId(null); }}
-            />
-          )}
           {federal.length === 0 && <span className="timeline-empty">No dated federal opportunities within the next 12 months.</span>}
         </div>
         <div className="historical-heading">
@@ -425,7 +402,7 @@ function Deadlines({ grants, selectedId, onSelect }: Omit<Props, "view" | "conte
               key={grant.opportunity.id}
               type="button"
               className={grant.opportunity.id === selectedId ? "selected" : ""}
-              onClick={() => choose(grant.opportunity.id)}
+              onClick={() => onSelect(grant.opportunity.id)}
             >
               <span><strong>{grant.opportunity.funderName}</strong><small>{awardRange(grant)}</small></span>
               <b>{grant.score.overallScore}</b>
@@ -433,13 +410,6 @@ function Deadlines({ grants, selectedId, onSelect }: Omit<Props, "view" | "conte
           ))}
           {historical.length === 0 && <p>No historical prospects match the current filters.</p>}
         </div>
-        {active?.opportunity.source === "irs-990pf" && (
-          <GrantPopover
-            grant={active}
-            note="Historical prospect — no confirmed open application or deadline"
-            onClose={() => { setPinnedId(null); setHoverId(null); }}
-          />
-        )}
       </div>
     </section>
   );

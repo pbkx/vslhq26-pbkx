@@ -1,3 +1,3 @@
 import{readFile}from"node:fs/promises";import{resolve}from"node:path";import type{McpServer}from"@modelcontextprotocol/sdk/server/mcp.js";import{registerAppResource,RESOURCE_MIME_TYPE}from"@modelcontextprotocol/ext-apps/server";
-export const GRANTPILOT_WIDGET_URI="ui://grantpilot/opportunity-workbench-v5";
+export const GRANTPILOT_WIDGET_URI="ui://grantpilot/opportunity-workbench-v14";
 export function registerGrantPilotWidget(server:McpServer){registerAppResource(server,"Grant Opportunity Workbench",GRANTPILOT_WIDGET_URI,{description:"Interactive GrantPilot workbench with match matrix, award-fit, score heatmap, deadlines, ranked evidence, comparisons, and watch actions."},async uri=>{console.log(`[mcp] resources/read ${uri.href}`);return{contents:[{uri:GRANTPILOT_WIDGET_URI,mimeType:RESOURCE_MIME_TYPE,text:await readFile(resolve("dist/widget.html"),"utf8"),_meta:{ui:{prefersBorder:false}}}]}})}

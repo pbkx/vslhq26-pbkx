@@ -1,12 +1,37 @@
 import type { AwardFilter, EligibilityFilter, Filters, SourceFilter, ViewId } from "../grantView";
 import { DEFAULT_FILTERS } from "../grantView";
 import type { SearchOutput } from "../types";
+import { SelectControl, type SelectOption } from "./SelectControl";
 
 const VIEWS: { id: ViewId; label: string; icon: "matrix" | "award" | "heatmap" | "deadline" }[] = [
   { id: "matrix", label: "Match Matrix", icon: "matrix" },
   { id: "award", label: "Award Fit", icon: "award" },
   { id: "heatmap", label: "Score Heatmap", icon: "heatmap" },
   { id: "deadlines", label: "Deadlines", icon: "deadline" },
+];
+
+const SOURCE_OPTIONS: SelectOption[] = [
+  { value: "all", label: "All sources" },
+  { value: "grants-gov", label: "Grants.gov" },
+  { value: "irs-990pf", label: "IRS prospects" },
+];
+const ELIGIBILITY_OPTIONS: SelectOption[] = [
+  { value: "all", label: "All eligibility" },
+  { value: "eligible", label: "Likely eligible" },
+  { value: "verify", label: "Needs verification" },
+  { value: "ineligible", label: "Likely ineligible" },
+];
+const SCORE_OPTIONS: SelectOption[] = [
+  { value: "0", label: "Any score" },
+  { value: "60", label: "Score ≥ 60" },
+  { value: "70", label: "Score ≥ 70" },
+  { value: "80", label: "Score ≥ 80" },
+];
+const AWARD_OPTIONS: SelectOption[] = [
+  { value: "all", label: "Any award size" },
+  { value: "under-100k", label: "Under $100K" },
+  { value: "100k-500k", label: "$100K – $500K" },
+  { value: "over-500k", label: "Over $500K" },
 ];
 
 function ViewIcon({ name }: { name: (typeof VIEWS)[number]["icon"] }) {
@@ -62,41 +87,47 @@ export function ControlBar({
           </div>
         </div>
       </div>
+      <div className="control-divider" aria-hidden="true" />
       <div className="filter-row">
         <label>
           <span>Source</span>
-          <select value={filters.source} onChange={(event) => set("source", event.target.value as SourceFilter)}>
-            <option value="all">All sources</option>
-            <option value="grants-gov">Grants.gov</option>
-            <option value="irs-990pf">IRS prospects</option>
-          </select>
+          <SelectControl
+            value={filters.source}
+            options={SOURCE_OPTIONS}
+            onValueChange={(value) => set("source", value as SourceFilter)}
+            ariaLabel="Source"
+            className="filter-select source-select"
+          />
         </label>
         <label>
           <span>Eligibility</span>
-          <select value={filters.eligibility} onChange={(event) => set("eligibility", event.target.value as EligibilityFilter)}>
-            <option value="all">All eligibility</option>
-            <option value="eligible">Likely eligible</option>
-            <option value="verify">Needs verification</option>
-            <option value="ineligible">Likely ineligible</option>
-          </select>
+          <SelectControl
+            value={filters.eligibility}
+            options={ELIGIBILITY_OPTIONS}
+            onValueChange={(value) => set("eligibility", value as EligibilityFilter)}
+            ariaLabel="Eligibility"
+            className="filter-select eligibility-select"
+          />
         </label>
         <label>
           <span>Minimum score</span>
-          <select value={filters.minScore} onChange={(event) => set("minScore", Number(event.target.value))}>
-            <option value="0">Any score</option>
-            <option value="60">60+</option>
-            <option value="70">70+</option>
-            <option value="80">80+</option>
-          </select>
+          <SelectControl
+            value={String(filters.minScore)}
+            options={SCORE_OPTIONS}
+            onValueChange={(value) => set("minScore", Number(value))}
+            ariaLabel="Minimum score"
+            className="filter-select score-select"
+          />
         </label>
         <label>
           <span>Award size</span>
-          <select value={filters.award} onChange={(event) => set("award", event.target.value as AwardFilter)}>
-            <option value="all">Any award</option>
-            <option value="under-100k">Under $100K</option>
-            <option value="100k-500k">$100K–$500K</option>
-            <option value="over-500k">Over $500K</option>
-          </select>
+          <SelectControl
+            value={filters.award}
+            options={AWARD_OPTIONS}
+            onValueChange={(value) => set("award", value as AwardFilter)}
+            ariaLabel="Award size"
+            className="filter-select award-select"
+          />
         </label>
         <button className="reset-button" disabled={!activeFilters} onClick={() => onFiltersChange(DEFAULT_FILTERS)}>
           Reset {activeFilters ? `(${activeFilters})` : ""}

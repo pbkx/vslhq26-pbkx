@@ -118,20 +118,111 @@ button:focus-visible, select:focus-visible, input:focus-visible { box-shadow: 0 
 .control-stats strong { font-size: 12px; font-variant-numeric: tabular-nums; }
 .control-stats span { margin-top: 4px; color: var(--muted); font-size: 9px; }
 .control-stats > i { width: 1px; height: 26px; background: var(--border); }
+.control-divider { height: 1px; margin: 8px -22px 0; background: var(--border); }
 .filter-row { display: flex; align-items: end; gap: 7px; margin-top: 8px; overflow-x: auto; scrollbar-width: none; }
 .filter-row::-webkit-scrollbar { display: none; }
 .filter-row label { display: grid; gap: 3px; }
 .filter-row label > span { color: var(--muted); font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; }
-.filter-row select {
-  height: 33px;
-  min-width: 116px;
-  padding: 0 28px 0 9px;
+.select-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 12px;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--surface);
   color: var(--foreground);
-  font-size: 11px;
+  text-align: left;
+  line-height: 1;
   cursor: pointer;
+}
+.select-trigger > span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.filter-select { height: 36px; font-size: 14px; }
+.source-select, .award-select { width: 150px; }
+.eligibility-select { width: 168px; }
+.score-select { width: 130px; }
+.select-chevron {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: .5;
+}
+.select-content {
+  z-index: 80;
+  max-height: 384px;
+  min-width: max(128px, var(--radix-select-trigger-width));
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--foreground);
+  box-shadow: 0 10px 28px rgb(0 0 0 / .16);
+  transform-origin: var(--radix-select-content-transform-origin);
+}
+.select-content[data-state="open"] { animation: select-open .14s ease-out; }
+.select-content[data-state="closed"] { animation: select-close .1s ease-in; }
+@keyframes select-open {
+  from { opacity: 0; transform: scale(.95) translateY(-4px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+@keyframes select-close {
+  from { opacity: 1; transform: scale(1); }
+  to { opacity: 0; transform: scale(.95); }
+}
+.select-viewport {
+  min-width: var(--radix-select-trigger-width);
+  padding: 4px;
+}
+.select-item {
+  position: relative;
+  display: flex;
+  width: 100%;
+  min-height: 32px;
+  align-items: center;
+  padding: 6px 8px 6px 32px;
+  border-radius: 3px;
+  outline: 0;
+  font-size: 14px;
+  line-height: 1.25;
+  cursor: default;
+  user-select: none;
+}
+.select-item[data-highlighted] { background: var(--soft); color: var(--foreground); }
+.select-item[data-disabled] { pointer-events: none; opacity: .5; }
+.select-indicator {
+  position: absolute;
+  left: 8px;
+  display: grid;
+  width: 14px;
+  height: 14px;
+  place-items: center;
+}
+.select-check {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.select-scroll-button {
+  display: flex;
+  height: 24px;
+  align-items: center;
+  justify-content: center;
+  cursor: default;
 }
 .reset-button {
   height: 33px;
@@ -274,7 +365,7 @@ button:focus-visible, select:focus-visible, input:focus-visible { box-shadow: 0 
 .empty-view b { color: var(--foreground); font-size: 12px; }
 .empty-view span { font-size: 10px; }
 
-.original-visual { position: relative; min-height: 500px; }
+.original-visual { position: relative; min-height: 536px; }
 .original-chart-header { margin-bottom: 12px; }
 .original-chart-header h2 { font-size: 14px; }
 .original-chart-header p { font-size: 11px; }
@@ -290,35 +381,18 @@ button:focus-visible, select:focus-visible, input:focus-visible { box-shadow: 0 
   color: var(--foreground);
   box-shadow: 0 14px 36px rgb(0 0 0 / .18);
   text-align: left;
+  pointer-events: none;
 }
 .grant-chart-popover.point-popover {
   position: absolute;
   transform: translate(-50%, calc(-100% - 12px));
 }
-.grant-chart-popover.floating-popover {
-  position: absolute;
-  top: 52px;
-  right: 12px;
-}
-.grant-chart-popover > strong { display: block; padding-right: 18px; font-size: 12px; line-height: 1.25; }
-.grant-chart-popover > p { margin: 3px 18px 0 0; color: var(--muted); font-size: 9px; }
+.grant-chart-popover > strong { display: block; font-size: 12px; line-height: 1.25; }
+.grant-chart-popover > p { margin: 3px 0 0; color: var(--muted); font-size: 9px; }
 .grant-chart-popover dl { margin: 9px 0 0; display: grid; grid-template-columns: 1fr 1fr; gap: 7px 10px; }
 .grant-chart-popover dt { color: var(--muted); font-size: 7px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
 .grant-chart-popover dd { margin: 2px 0 0; font-size: 8px; font-weight: 650; line-height: 1.25; }
 .grant-chart-popover > small { display: block; margin-top: 7px; color: var(--muted); font-size: 8px; font-style: italic; line-height: 1.35; }
-.popover-close {
-  position: absolute;
-  top: 6px;
-  right: 7px;
-  width: 21px;
-  height: 21px;
-  border: 0;
-  border-radius: 50%;
-  background: transparent;
-  color: var(--muted);
-  cursor: pointer;
-}
-.popover-close:hover { background: var(--soft); color: var(--foreground); }
 .popover-eligibility { display: block; margin-top: 8px; font-size: 8px; font-weight: 750; }
 .popover-eligibility.eligible { color: var(--positive); }
 .popover-eligibility.verify { color: var(--private); }
@@ -326,7 +400,7 @@ button:focus-visible, select:focus-visible, input:focus-visible { box-shadow: 0 
 
 .original-matrix {
   position: relative;
-  min-height: 420px;
+  min-height: 456px;
   border: 1px solid var(--border);
   border-radius: 12px;
   background: var(--surface);
@@ -389,69 +463,72 @@ button:focus-visible, select:focus-visible, input:focus-visible { box-shadow: 0 
 
 .chart-sort {
   height: 32px;
-  min-width: 145px;
-  padding: 0 26px 0 9px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--surface);
-  color: var(--foreground);
-  font-size: 9px;
+  width: 150px;
+  font-size: 12px;
 }
+.award-fit-visual { display: flex; flex-direction: column; }
+.award-fit-visual .original-chart-header p { font-size: 12px; }
 .original-award-board {
-  position: relative;
-  min-height: 420px;
+  display: flex;
+  flex: 1;
+  min-height: 456px;
   overflow: hidden;
   border: 1px solid var(--border);
   border-radius: 12px;
   background: var(--surface);
 }
-.original-award-axis,
-.original-award-row {
-  display: grid;
-  grid-template-columns: minmax(170px, 38%) minmax(260px, 1fr) 50px;
-  align-items: center;
-}
+.original-award-scroll { width: 100%; height: 100%; max-height: 456px; overflow-y: auto; }
 .original-award-axis {
-  position: relative;
-  z-index: 5;
-  min-height: 39px;
-  padding: 0 12px;
+  position: sticky;
+  z-index: 10;
+  top: 0;
+  display: flex;
+  align-items: center;
+  padding: 8px 16px;
   border-bottom: 1px solid var(--border);
   background: var(--surface);
 }
-.original-award-axis > span,
-.original-award-axis > b { color: var(--muted); font-size: 8px; font-weight: 750; letter-spacing: .06em; text-transform: uppercase; }
-.original-award-axis > b { text-align: right; }
-.award-axis-track { position: relative; height: 18px; }
+.award-opportunity-label {
+  width: 38%;
+  flex-shrink: 0;
+  padding-right: 12px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: .025em;
+  text-transform: uppercase;
+}
+.award-axis-track { position: relative; height: 16px; flex: 1; }
 .award-axis-track > span {
   position: absolute;
-  top: 2px;
+  top: 0;
   color: var(--muted);
-  font-size: 7px;
+  font-size: 10px;
   transform: translateX(-50%);
   white-space: nowrap;
 }
-.target-band { position: absolute; inset-block: 0; border-radius: 4px; background: color-mix(in srgb, var(--positive) 11%, transparent); }
-.original-award-scroll { max-height: 405px; overflow-y: auto; }
+.target-band { position: absolute; inset-block: 0; border-radius: 4px; background: var(--soft); }
+.original-award-rows { margin: 0; padding: 0; list-style: none; }
 .original-award-row {
+  display: flex;
+  align-items: center;
   width: 100%;
-  min-height: 43px;
-  padding: 6px 12px;
+  padding: 10px 16px;
   border: 0;
-  border-bottom: 1px solid var(--border);
   background: var(--surface);
   text-align: left;
   cursor: pointer;
+  transition: background .15s ease;
 }
 .original-award-row:hover, .original-award-row.selected { background: var(--soft); }
-.award-row-name { min-width: 0; padding-right: 12px; }
+.award-row-name { width: 38%; min-width: 0; flex-shrink: 0; padding-right: 12px; }
 .award-row-name strong, .award-row-name small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.award-row-name strong { font-size: 9px; }
-.award-row-name small { margin-top: 2px; color: var(--muted); font-size: 7px; }
-.original-award-track { position: relative; height: 25px; }
-.original-award-track .target-band { opacity: .65; }
+.award-row-name strong { font-size: 12px; font-weight: 500; }
+.award-row-name small { margin-top: 2px; color: var(--muted); font-size: 11px; }
+.original-award-track { position: relative; height: 24px; min-width: 0; flex: 1; }
+.original-award-track .target-band { opacity: .6; }
 .range-baseline { position: absolute; left: 0; right: 0; top: 50%; height: 1px; background: var(--border); transform: translateY(-50%); }
-.award-range-bar { position: absolute; top: calc(50% - 4px); height: 8px; border-radius: 99px; background: var(--federal); opacity: .85; }
+.award-range-bar { position: absolute; top: 50%; height: 10px; border-radius: 99px; background: var(--federal); opacity: .85; transform: translateY(-50%); }
 .award-range-bar.private { background: var(--private); }
 .award-endpoint {
   position: absolute;
@@ -467,25 +544,34 @@ button:focus-visible, select:focus-visible, input:focus-visible { box-shadow: 0 
 .single-award {
   position: absolute;
   top: 50%;
-  width: 11px;
-  height: 11px;
+  width: 12px;
+  height: 12px;
   background: var(--federal);
   transform: translate(-50%, -50%) rotate(45deg);
 }
 .single-award.private { background: var(--private); }
 .original-award-track em {
   position: absolute;
-  left: 7px;
+  left: 8px;
   top: 50%;
-  padding: 2px 6px;
+  padding: 2px 8px;
   border: 1px dashed var(--border-strong);
   border-radius: 99px;
+  background: var(--surface);
   color: var(--muted);
-  font-size: 7px;
+  font-size: 10px;
   font-style: normal;
   transform: translateY(-50%);
 }
-.award-row-score { text-align: right; font-size: 10px; font-variant-numeric: tabular-nums; }
+.award-row-score {
+  width: 56px;
+  flex-shrink: 0;
+  padding-left: 8px;
+  text-align: right;
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
 
 .original-heat-scale { display: flex; flex-wrap: wrap; gap: 8px; color: var(--muted); font-size: 8px; }
 .original-heat-scale span { display: inline-flex; align-items: center; gap: 3px; }
@@ -496,7 +582,7 @@ button:focus-visible, select:focus-visible, input:focus-visible { box-shadow: 0 
 .original-heat-scale i.top { background: var(--positive); }
 .original-heatmap-shell {
   position: relative;
-  max-height: 420px;
+  max-height: 456px;
   overflow: auto;
   border: 1px solid var(--border);
   border-radius: 12px;
@@ -535,13 +621,14 @@ button:focus-visible, select:focus-visible, input:focus-visible { box-shadow: 0 
 }
 .original-heatmap thead .sticky-name { z-index: 30; padding: 0 10px; color: var(--muted); font-size: 7px; letter-spacing: .05em; text-transform: uppercase; }
 .original-heatmap tbody tr:hover .sticky-name, .original-heatmap tbody tr.selected .sticky-name { background: var(--soft); }
-.original-heatmap tbody tr.selected { outline: 2px solid var(--positive); outline-offset: -2px; }
+.original-heatmap tbody tr.selected { outline: 2px solid var(--foreground); outline-offset: -2px; }
 .original-heatmap tbody .sticky-name > button { width: 100%; padding: 7px 9px; border: 0; background: transparent; text-align: left; cursor: pointer; }
 .original-heatmap tbody .sticky-name strong, .original-heatmap tbody .sticky-name small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .original-heatmap tbody .sticky-name strong { font-size: 8px; }
 .original-heatmap tbody .sticky-name small { width: fit-content; margin-top: 4px; padding: 2px 5px; border-radius: 99px; background: var(--soft-2); color: var(--muted); font-size: 6px; }
 .original-heatmap tbody .sticky-name small.private { background: color-mix(in srgb, var(--private) 13%, var(--surface)); color: var(--private); }
 .original-heatmap td { padding: 4px; background: var(--surface); text-align: center; }
+.original-heatmap td.heat-cell { position: relative; }
 .original-heatmap td > button {
   width: 100%;
   min-height: 34px;
@@ -555,11 +642,29 @@ button:focus-visible, select:focus-visible, input:focus-visible { box-shadow: 0 
   transition: transform .14s ease;
 }
 .original-heatmap td > button:hover, .original-heatmap td > button:focus-visible { position: relative; z-index: 2; transform: scale(1.06); }
+.heat-cell-tooltip {
+  position: absolute;
+  z-index: 40;
+  left: 50%;
+  bottom: calc(100% + 6px);
+  width: 208px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--foreground);
+  box-shadow: 0 10px 28px rgb(0 0 0 / .18);
+  text-align: left;
+  pointer-events: none;
+  transform: translateX(-50%);
+}
+.heat-cell-tooltip strong { display: block; font-size: 12px; line-height: 1.3; }
+.heat-cell-tooltip span { display: block; margin-top: 2px; color: var(--muted); font-size: 11px; line-height: 1.35; }
 
 .original-deadlines {
   position: relative;
-  min-height: 420px;
-  max-height: 440px;
+  min-height: 456px;
+  max-height: 476px;
   overflow-y: auto;
   padding: 14px;
   border: 1px solid var(--border);
@@ -802,6 +907,7 @@ footer span:last-child { text-align: right; }
 
 @media (max-width: 700px) {
   .control-bar { padding: 9px 14px; }
+  .control-divider { margin-right: -14px; margin-left: -14px; }
   .view-tabs { width: 100%; overflow-x: auto; }
   .view-tabs button { flex: 1 0 auto; }
   .control-stats { gap: 10px; }
@@ -809,13 +915,11 @@ footer span:last-child { text-align: right; }
   .workspace, .compare-dock, .comparison-tray, .ranked-strip { margin-left: 10px; margin-right: 10px; }
   .workspace { padding-left: 0; padding-right: 0; }
   .visual-card { min-height: 390px; padding: 11px; }
-  .original-visual { min-height: 460px; }
-  .original-matrix { min-height: 380px; }
+  .original-visual { min-height: 496px; }
+  .original-matrix { min-height: 416px; }
   .grant-chart-popover { width: 216px; padding: 10px; }
-  .grant-chart-popover.floating-popover { top: 48px; right: 9px; }
-  .original-award-axis, .original-award-row { grid-template-columns: minmax(150px, 40%) minmax(230px, 1fr) 42px; }
-  .original-heatmap-shell { max-height: 390px; }
-  .original-deadlines { min-height: 390px; }
+  .original-heatmap-shell { max-height: 426px; }
+  .original-deadlines { min-height: 426px; }
   .matrix-wrap { min-height: 320px; }
   .legend { display: none; }
   .selected-facts { grid-template-columns: 1fr 1fr; }
@@ -832,7 +936,7 @@ footer span:last-child { text-align: right; }
 
 @media (max-width: 480px) {
   .filter-row label > span { display: none; }
-  .filter-row select { min-width: 110px; }
+  .filter-row .filter-select { min-width: 110px; }
   .view-tabs button { padding: 0 8px; }
   .view-tabs button span { display: none; }
   .view-tabs button { min-width: 42px; justify-content: center; }
@@ -843,8 +947,6 @@ footer span:last-child { text-align: right; }
   .matrix-chart { min-width: 560px; }
   .matrix-wrap { overflow-x: auto; justify-content: start; }
   .original-matrix { min-width: 0; }
-  .original-award-board { overflow-x: auto; }
-  .original-award-axis, .original-award-scroll { min-width: 560px; }
   .historical-grid { grid-template-columns: 1fr; }
   .grant-chart-popover.point-popover { transform: translate(-50%, calc(-100% - 8px)); }
   .deadline-row { grid-template-columns: 42px minmax(140px, 1fr) 29px; }
