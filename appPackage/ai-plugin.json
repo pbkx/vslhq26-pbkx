@@ -1,0 +1,40 @@
+{
+  "$schema":"https://aka.ms/json-schemas/copilot/plugin/v2.4/schema.json",
+  "schema_version":"v2.4",
+  "name_for_human":"GrantPilot",
+  "namespace":"grantpilot",
+  "description_for_human":"Discover current federal opportunities and research historical private-foundation funding prospects.",
+  "description_for_model":"MANDATORY: Call search_grants for every new grant discovery, recommendation, ranking, or comparison request. Grants.gov records may be current opportunities. IRS 990-PF records are historical private-funder prospects only, and USAspending is historical federal-award context only. Never claim that IRS history is an open application or that eligibility or funding is guaranteed.",
+  "functions":[
+    {"name":"search_grants","description":"Find and transparently rank Grants.gov opportunities and IRS 990-PF historical funder prospects."},
+    {"name":"get_grant_details","description":"Get complete normalized grant details and score evidence."},
+    {"name":"rescore_grants","description":"Reweight cached results without repeating provider searches."},
+    {"name":"compare_grants","description":"Compare two or three grants deterministically."},
+    {"name":"create_grant_watch","description":"Create a persistent opportunity watch with Azure Communication Services Email notifications."},
+    {"name":"list_grant_watches","description":"List active grant watches."},
+    {"name":"delete_grant_watch","description":"Delete a grant watch."},
+    {"name":"get_project_ideas","description":"Return evidence for Copilot to suggest grounded project concepts."}
+  ],
+  "runtimes":[{
+    "type":"RemoteMCPServer",
+    "auth":{"type":"None"},
+    "spec":{
+      "url":"https://rqt1l69t-3000.usw2.devtunnels.ms/mcp",
+      "mcp_tool_description":{"tools":[{
+        "name":"search_grants",
+        "description":"Use whenever a user wants to find, rank, recommend, or compare grants. Returns the interactive Grant Opportunity Workbench.",
+        "inputSchema":{"type":"object","properties":{
+          "query":{"type":"string","description":"Natural-language grant search."},
+          "organization":{"type":"object","description":"Organization profile inferred from the conversation."},
+          "project":{"type":"object","description":"Project profile inferred from the conversation."},
+          "sources":{"type":"array","items":{"type":"string","enum":["grants-gov","irs-990pf"]}},
+          "filters":{"type":"object"},
+          "limit":{"type":"integer","default":10,"minimum":1,"maximum":12},
+          "refreshData":{"type":"boolean","default":false}
+        }},
+        "_meta":{"ui":{"resourceUri":"ui://grantpilot/opportunity-workbench-v1","visibility":["model"]}}
+      }]}
+    },
+    "run_for_functions":["search_grants","get_grant_details","rescore_grants","compare_grants","create_grant_watch","list_grant_watches","delete_grant_watch","get_project_ideas"]
+  }]
+}

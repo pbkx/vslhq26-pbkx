@@ -1,0 +1,3 @@
+import{McpServer}from"@modelcontextprotocol/sdk/server/mcp.js";import{registerGrantTools,REQUIRED_TOOLS}from"./tools/grantTools.js";import{registerGrantPilotWidget}from"./resources/grantPilotWidget.js";
+export{REQUIRED_TOOLS};
+export function createGrantPilotMcpServer(){const server=new McpServer({name:"grantpilot-mcp",version:"1.0.0",websiteUrl:"https://rqt1l69t-3000.usw2.devtunnels.ms"},{capabilities:{logging:{},resources:{listChanged:false},tools:{listChanged:false}}});registerGrantTools(server);registerGrantPilotWidget(server);server.server.oninitialized=()=>console.log("[mcp] initialize complete");return server}

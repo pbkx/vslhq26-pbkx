@@ -1,0 +1,7 @@
+node_modules/
+dist/
+cache/grants/
+data/raw/
+data/index/
+.env
+*.log

@@ -1,0 +1,45 @@
+{
+  "name": "grantpilot-mcp",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22 <23"
+  },
+  "scripts": {
+    "dev": "tsx scripts/dev.ts",
+    "build": "tsx scripts/buildWidget.ts && tsc -p tsconfig.json",
+    "start": "node dist/server.js",
+    "test": "vitest run --exclude 'dist/**'",
+    "verify:mcp": "tsx scripts/verifyMcp.ts",
+    "package:agent": "tsx scripts/packageAgent.ts",
+    "data:ingest:grants": "tsx scripts/ingestGrantsGov.ts",
+    "data:ingest:irs": "tsx scripts/ingestIrs990Pf.ts",
+    "data:refresh:usaspending": "tsx scripts/refreshUsaspending.ts",
+    "data:status": "tsx scripts/dataStatus.ts"
+  },
+  "dependencies": {
+    "@azure/communication-email": "^1.1.0",
+    "@modelcontextprotocol/ext-apps": "^1.7.5",
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "csv-parse": "^7.0.1",
+    "express": "^5.2.1",
+    "react": "^19.2.3",
+    "react-dom": "^19.2.3",
+    "saxes": "^6.0.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/archiver": "^6.0.3",
+    "@types/express": "^5.0.6",
+    "@types/node": "^22.15.0",
+    "@types/react": "^19.2.9",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^5.1.4",
+    "archiver": "^7.0.1",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3",
+    "vite": "^8.1.5",
+    "vitest": "^4.1.10"
+  }
+}
