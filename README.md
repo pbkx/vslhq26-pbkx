@@ -34,6 +34,8 @@ Microsoft 365 Copilot Chat
 
 The named declarative agent remains the entry point. The web server exists to provide MCP, health, privacy, and terms endpoints; it is not a standalone website product.
 
+`search_grants` returns every matched record in one compact graph-ready payload, so all charts and ranked rows render immediately without widget pagination. The payload includes the numeric scoring, award, deadline, source, and eligibility fields required by the workbench. Selecting a grant silently calls `get_grant_details` through the MCP App host bridge to hydrate the longer evidence text inside the widget without adding a Copilot chat message.
+
 ## Tech stack
 
 - **Languages:** TypeScript, TSX, HTML, CSS, SQL
@@ -162,9 +164,11 @@ Expected behavior:
 2. Copilot calls `search_grants`.
 3. GrantPilot searches its indexed Grants.gov and IRS records.
 4. The inline Grant Opportunity Workbench renders.
-5. Current federal opportunities are visibly separated from historical private-funder prospects.
-6. Rescoring reuses normalized records without repeating provider searches.
-7. A watch can be created; email is preview-only until Azure Communication Services is configured.
+5. Every matched grant appears immediately in all four visualizations and the ranked table.
+6. Selecting a grant silently hydrates its full evidence without a new chat message.
+7. Current federal opportunities are visibly separated from historical private-funder prospects.
+8. Rescoring reuses normalized records without repeating provider searches.
+9. A watch can be created; email is preview-only until Azure Communication Services is configured.
 
 ## Data ingestion and refresh
 

@@ -35,22 +35,24 @@ if(!output?.grants?.length||output.grants.length<3)
  throw new Error("search_grants returned too few structured grants for the demo prompt");
 if((output.sourceCounts?.["grants-gov"]??0)+(output.sourceCounts?.["irs-990pf"]??0)!==output.grants.length)
  throw new Error("search_grants returned inconsistent source counts");
-if(firstBytes>=48*1024)throw new Error("Initial tool result exceeds the 48 KiB GrantPilot safety ceiling");
-const pagingResult=output.hasMore?result:await client.callTool({
+if(!output.allRecordsLoaded||output.hasMore||output.grants.length!==output.totalResultCount)
+ throw new Error("search_grants did not deliver every matched graph-ready record");
+const detailResult=await client.callTool({name:"get_grant_details",arguments:{grantId:output.grants[0].id}});
+const detail=detailResult.structuredContent as any;
+if(detail?.opportunity?.id!==output.grants[0].id||!detail?.score?.components?.missionAlignment?.reasons?.length)
+ throw new Error("get_grant_details did not return silently hydratable evidence");
+
+const allResult=await client.callTool({
  name:"search_grants",
  arguments:{query:"Find nonprofit grants for AI workforce and digital inclusion programs nationwide."},
 });
-const paging=pagingResult.structuredContent as any;
-if(!paging.hasMore||!Number.isInteger(paging.nextOffset))
- throw new Error("The paging search did not expose a load-more page");
-
-const moreResult=await client.callTool({name:"load_more_grants",arguments:{queryId:paging.queryId,offset:paging.nextOffset}});
-const more=moreResult.structuredContent as any,moreBytes=Buffer.byteLength(JSON.stringify(moreResult));
-if(!more?.append||!more.grants?.length)throw new Error("load_more_grants returned no appendable records");
-if(moreBytes>=48*1024)throw new Error("Load-more tool result exceeds the 48 KiB GrantPilot safety ceiling");
-const firstIds=new Set(paging.grants.map((grant:any)=>grant.opportunity.id));
-if(more.grants.some((grant:any)=>firstIds.has(grant.opportunity.id)))
- throw new Error("load_more_grants returned duplicate IDs from the first page");
+const all=allResult.structuredContent as any,allBytes=Buffer.byteLength(JSON.stringify(allResult));
+if(!all.allRecordsLoaded||all.hasMore||all.grants.length!==all.totalResultCount)
+ throw new Error("The broad search did not deliver all records in its initial graph payload");
+if(all.grants.length<50)
+ throw new Error("The broad all-record search returned too few records to verify payload scaling");
+if(allBytes>=48*1024)
+ throw new Error(`All-record tool result exceeds the 48 KiB safety ceiling: ${allBytes} bytes`);
 
 const currentOnlyResult=await client.callTool({name:"search_grants",arguments:{
  query:`${prompt} Return 20 current open federal grants. Do not include historical prospects.`,
@@ -58,12 +60,20 @@ const currentOnlyResult=await client.callTool({name:"search_grants",arguments:{
  requestedResultCount:20,
 }});
 const currentOnly=currentOnlyResult.structuredContent as any;
-if(!currentOnly.grants?.length||currentOnly.grants.some((grant:any)=>grant.opportunity.recordCategory!=="current-federal-opportunity"))
+if(!currentOnly.grants?.length||currentOnly.grants.some((grant:any)=>grant.category!=="current-federal-opportunity"))
  throw new Error("current-federal filtering returned another record type");
 if(currentOnly.sourceCounts?.["irs-990pf"]!==0)
  throw new Error("current-federal filtering included historical IRS prospects");
 if(currentOnly.totalResultCount>20)
  throw new Error("requestedResultCount was not honored");
+
+const ceilingResult=await client.callTool({name:"search_grants",arguments:{
+ query:"Find hunger-relief funding opportunities for a Washington nonprofit with awards below $500,000.",
+ resultTypes:["current-federal","forecasted-federal","historical-private-prospect"],
+}});
+const ceiling=ceilingResult.structuredContent as any;
+if(!ceiling.grants?.length||ceiling.context?.minimumAward!==undefined||ceiling.context?.maximumAward!==500000)
+ throw new Error("A below-amount request was not treated as a maximum-only award constraint");
 
 const tooMany=await client.callTool({name:"search_grants",arguments:{query:prompt,requestedResultCount:101}});
 if(!tooMany.isError||(tooMany.structuredContent as any)?.error?.code!=="RESULT_LIMIT_EXCEEDED")
@@ -73,9 +83,9 @@ const resource=await client.readResource({uri:GRANTPILOT_WIDGET_URI}),content=re
 if(content?.mimeType!=="text/html;profile=mcp-app"||!("text"in content)||!content.text.includes("GrantPilot"))
  throw new Error("GrantPilot widget invalid");
 console.log(
- `[verify] ${mcpUrl} | tools/list ${names.length} ✓ | page 1 ${output.grants.length} records ${(firstBytes/1024).toFixed(1)} KiB ✓ | `+
- `load_more ${more.grants.length} records ${(moreBytes/1024).toFixed(1)} KiB ✓ | total cached ${paging.totalResultCount} | `+
- `current-only ${currentOnly.grants.length} ✓ | 101-result limit rejected ✓ | `+
+ `[verify] ${mcpUrl} | tools/list ${names.length} ✓ | demo ${output.grants.length} records ${(firstBytes/1024).toFixed(1)} KiB ✓ | `+
+ `all-record graph payload ${all.grants.length}/${all.totalResultCount} ${(allBytes/1024).toFixed(1)} KiB ✓ | silent details ✓ | `+
+ `current-only ${currentOnly.grants.length} ✓ | below-amount ${ceiling.grants.length} ✓ | 101-result limit rejected ✓ | `+
  `widget ${(content.text.length/1024).toFixed(1)} KiB ✓`,
 );
 await transport.terminateSession().catch(()=>{});

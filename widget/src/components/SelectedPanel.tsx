@@ -101,6 +101,7 @@ function ActionIcon({ name }: { name: "source" | "compare" | "watch" | "copilot"
 
 export function SelectedPanel({
   grant,
+  detailsLoading,
   inComparison,
   comparisonCount,
   onToggleComparison,
@@ -110,6 +111,7 @@ export function SelectedPanel({
   onCreateWatch,
 }: {
   grant: GrantResult;
+  detailsLoading: boolean;
   inComparison: boolean;
   comparisonCount: number;
   onToggleComparison: () => void;
@@ -166,6 +168,7 @@ export function SelectedPanel({
         <div>
           <h2>{grant.opportunity.title}</h2>
           <p>{grant.opportunity.funderName}</p>
+          {detailsLoading && <span className="detail-status">Loading complete evidence…</span>}
         </div>
       </div>
 

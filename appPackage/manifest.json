@@ -1,7 +1,7 @@
 {
   "$schema": "https://developer.microsoft.com/json-schemas/teams/v1.24/MicrosoftTeams.schema.json",
   "manifestVersion": "1.24",
-  "version": "2.1.6",
+  "version": "2.1.9",
   "id": "${{TEAMS_APP_ID}}",
   "developer": {"name":"GrantPilot","websiteUrl":"https://rqt1l69t-3000.usw2.devtunnels.ms","privacyUrl":"https://rqt1l69t-3000.usw2.devtunnels.ms/privacy","termsOfUseUrl":"https://rqt1l69t-3000.usw2.devtunnels.ms/terms"},
   "name": {"short":"GrantPilot","full":"GrantPilot nonprofit grant opportunity agent"},

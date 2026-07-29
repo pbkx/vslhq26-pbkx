@@ -59,6 +59,9 @@ button:focus-visible, select:focus-visible, input:focus-visible { box-shadow: 0 
 .loading h2 { margin: 0; font-size: 20px; letter-spacing: -0.02em; }
 .loading p { margin: 7px 0 0; color: var(--muted); }
 .loading > span { margin-top: 14px; color: var(--warning); font-size: 12px; }
+.empty-results { text-align: center; padding-inline: 56px; }
+.empty-results p { max-width: 620px; line-height: 1.55; }
+.empty-results > span { max-width: 620px; color: var(--muted); line-height: 1.45; }
 
 .mark {
   flex: 0 0 auto;
@@ -752,6 +755,9 @@ button:focus-visible, select:focus-visible, input:focus-visible { box-shadow: 0 
 .selected-title { margin-top: 13px; }
 .selected-title h2 { margin: 0; font-size: clamp(16px, 1.7vw, 21px); line-height: 1.16; letter-spacing: -0.025em; }
 .selected-title p { margin: 6px 0 0; color: var(--muted); font-size: 10px; line-height: 1.35; }
+.detail-status { display: inline-flex; margin-top: 7px; color: var(--muted); font-size: 9px; font-weight: 650; letter-spacing: .02em; }
+.detail-status::before { content: ""; width: 7px; height: 7px; margin: 2px 6px 0 0; border: 1.5px solid var(--border-strong); border-top-color: var(--text); border-radius: 50%; animation: detail-spin .8s linear infinite; }
+@keyframes detail-spin { to { transform: rotate(360deg); } }
 .score-ring { position: relative; width: 60px; height: 60px; display: grid; place-items: center; }
 .score-ring svg { position: absolute; inset: 0; width: 100%; height: 100%; transform: rotate(-90deg); }
 .score-ring circle { fill: none; stroke: var(--soft-2); stroke-width: 4; }
@@ -1005,11 +1011,6 @@ button:focus-visible, select:focus-visible, input:focus-visible { box-shadow: 0 
 }
 .compare-check { display: grid; place-items: center; cursor: pointer; }
 .compare-check input { width: 18px; height: 18px; margin: 0; accent-color: var(--foreground); cursor: pointer; }
-.load-more { width: 100%; min-height: 48px; padding: 8px 14px; border: 0; border-top: 1px solid var(--border); background: var(--surface); display: flex; align-items: center; gap: 10px; text-align: left; cursor: pointer; }
-.load-more:hover { background: var(--soft); }
-.load-more > b { width: 27px; height: 27px; display: grid; place-items: center; border-radius: 8px; background: var(--black); color: var(--surface); font-size: 14px; }
-.load-more span { font-size: 10px; font-weight: 700; }
-.load-more small { display: block; margin-top: 2px; color: var(--muted); font-size: 8px; font-weight: 400; }
 
 footer { margin: 12px 18px 18px; display: flex; justify-content: space-between; gap: 20px; color: var(--muted); font-size: 8px; line-height: 1.4; }
 footer span:last-child { text-align: right; }

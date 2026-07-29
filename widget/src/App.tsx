@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { callTool, connectBridge, followUp, openLink, setBridgeListeners } from "./mcpBridge";
 import { applyFilters, DEFAULT_FILTERS, type Filters, type ViewId } from "./grantView";
-import type { SearchOutput } from "./types";
+import type { GrantResult, SearchOutput } from "./types";
 import GrantPilotMark from "./GrantPilotMark";
 import { ControlBar } from "./components/ControlBar";
 import { Visualization } from "./components/Visualizations";
@@ -17,7 +17,8 @@ export default function App() {
   const [comparison, setComparison] = useState<Set<string>>(new Set());
   const [comparisonOpen, setComparisonOpen] = useState(false);
   const [notice, setNotice] = useState("");
-  const [loadingMore, setLoadingMore] = useState(false);
+  const [detailsLoading, setDetailsLoading] = useState("");
+  const detailRequests = useRef(new Set<string>());
 
   useEffect(() => {
     setBridgeListeners(
@@ -41,17 +42,59 @@ export default function App() {
             warnings: [...new Set([...current.warnings, ...next.warnings])],
           };
         });
-        setSelectedId((current) => current || next.grants.reduce((best, grant) => !best || grant.score.overallScore > best.score.overallScore ? grant : best, next.grants[0])?.opportunity.id || "");
+        setSelectedId((current) => {
+          if (next.grants.some((grant) => grant.opportunity.id === current)) return current;
+          return next.grants.reduce(
+            (best, grant) => !best || grant.score.overallScore > best.score.overallScore ? grant : best,
+            next.grants[0],
+          )?.opportunity.id ?? "";
+        });
       },
       setNotice,
     );
     connectBridge();
   }, []);
 
+  useEffect(() => {
+    detailRequests.current.clear();
+  }, [data?.queryId]);
+
+  useEffect(() => {
+    if (!data || !selectedId) return;
+    const grant = data.grants.find((item) => item.opportunity.id === selectedId);
+    if (!grant || grant.detailsLoaded || detailRequests.current.has(selectedId)) return;
+
+    detailRequests.current.add(selectedId);
+    setDetailsLoading(selectedId);
+    callTool("get_grant_details", { grantId: selectedId })
+      .then((detail: GrantResult) => {
+        if (!detail?.opportunity?.id || !detail?.score?.components) {
+          throw new Error("GrantPilot returned incomplete grant evidence.");
+        }
+        setData((current) => current ? {
+          ...current,
+          grants: current.grants.map((item) =>
+            item.opportunity.id === selectedId ? { ...detail, detailsLoaded: true } : item),
+        } : current);
+      })
+      .catch((error) => {
+        setNotice(error instanceof Error ? error.message : "Unable to load complete grant evidence.");
+      })
+      .finally(() => {
+        detailRequests.current.delete(selectedId);
+        setDetailsLoading((current) => current === selectedId ? "" : current);
+      });
+  }, [data?.queryId, selectedId]);
+
   const filtered = useMemo(() => data ? applyFilters(data.grants, filters) : [], [data, filters]);
   const selected = filtered.find((grant) => grant.opportunity.id === selectedId) ?? filtered[0] ?? data?.grants[0];
   const compared = data?.grants.filter((grant) => comparison.has(grant.opportunity.id)) ?? [];
-  const remaining = Math.max(0, (data?.totalResultCount ?? 0) - (data?.grants.length ?? 0));
+
+  useEffect(() => {
+    if (filtered.length && !filtered.some((grant) => grant.opportunity.id === selectedId)) {
+      setSelectedId(filtered[0]!.opportunity.id);
+    }
+  }, [filtered, selectedId]);
 
   function toggleComparison(id: string) {
     setComparison((current) => {
@@ -87,20 +130,6 @@ export default function App() {
     }
   }
 
-  async function loadMore() {
-    if (!data?.hasMore || loadingMore) return;
-    setLoadingMore(true);
-    setNotice("Loading the next cached page…");
-    try {
-      await callTool("load_more_grants", { queryId: data.queryId, offset: data.nextOffset ?? data.grants.length });
-      setNotice("More grants were added without rescanning providers.");
-    } catch (error) {
-      setNotice(error instanceof Error ? error.message : "Unable to load more grants.");
-    } finally {
-      setLoadingMore(false);
-    }
-  }
-
   async function createWatch(email: string) {
     if (!data || !selected) return;
     try {
@@ -119,13 +148,24 @@ export default function App() {
     }
   }
 
-  if (!data || !selected) {
+  if (!data) {
     return (
       <main className="loading">
         <GrantPilotMark />
         <h2>Opening GrantPilot</h2>
         <p>Preparing your grant opportunity workbench…</p>
         {notice && <span>{notice}</span>}
+      </main>
+    );
+  }
+
+  if (!data.grants.length || !selected) {
+    return (
+      <main className="loading empty-results">
+        <GrantPilotMark />
+        <h2>No matching records</h2>
+        <p>GrantPilot completed the search, but no sufficiently relevant opportunities passed the requested mission, geography, eligibility, and award filters.</p>
+        <span>{data.warnings[0] ?? "Broaden one constraint or try a related mission phrase."}</span>
       </main>
     );
   }
@@ -144,6 +184,7 @@ export default function App() {
         <Visualization view={view} grants={filtered} selectedId={selected.opportunity.id} onSelect={setSelectedId} context={data.context} />
         <SelectedPanel
           grant={selected}
+          detailsLoading={detailsLoading === selected.opportunity.id}
           inComparison={comparison.has(selected.opportunity.id)}
           comparisonCount={comparison.size}
           onToggleComparison={() => toggleComparison(selected.opportunity.id)}
@@ -160,10 +201,6 @@ export default function App() {
         onSelect={setSelectedId}
         comparison={comparison}
         onToggleComparison={toggleComparison}
-        hasMore={Boolean(data.hasMore)}
-        remaining={remaining}
-        onLoadMore={loadMore}
-        loadingMore={loadingMore}
       />
       <footer>
         <span>GrantPilot ranks evidence; it does not guarantee eligibility or funding.</span>

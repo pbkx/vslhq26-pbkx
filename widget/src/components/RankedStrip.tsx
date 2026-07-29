@@ -63,20 +63,12 @@ export function RankedStrip({
   onSelect,
   comparison,
   onToggleComparison,
-  hasMore,
-  remaining,
-  onLoadMore,
-  loadingMore,
 }: {
   grants: GrantResult[];
   selectedId: string;
   onSelect: (id: string) => void;
   comparison: Set<string>;
   onToggleComparison: (id: string) => void;
-  hasMore: boolean;
-  remaining: number;
-  onLoadMore: () => void;
-  loadingMore: boolean;
 }) {
   const [open, setOpen] = useState(true);
   const ranked = useMemo(
@@ -176,15 +168,6 @@ export function RankedStrip({
             </div>
           </div>
 
-          {hasMore && (
-            <button className="load-more" onClick={onLoadMore} disabled={loadingMore}>
-              <b>{loadingMore ? "…" : "+"}</b>
-              <span>
-                {loadingMore ? "Loading the next cached page" : "Load more ranked grants"}
-                <small>{remaining} records remain · no provider rescan</small>
-              </span>
-            </button>
-          )}
         </>
       )}
     </section>

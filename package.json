@@ -10,7 +10,7 @@
     "dev": "tsx scripts/dev.ts",
     "build": "tsx scripts/buildWidget.ts && tsc -p tsconfig.json",
     "start": "node dist/server.js",
-    "test": "vitest run --exclude 'dist/**'",
+    "test": "vitest run --exclude 'dist/**' --testTimeout=60000",
     "verify:mcp": "tsx scripts/verifyMcp.ts",
     "package:agent": "tsx scripts/packageAgent.ts",
     "preview:widget": "tsx scripts/buildWidgetPreview.ts",

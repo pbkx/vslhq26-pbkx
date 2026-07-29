@@ -11,7 +11,7 @@ let close: (() => Promise<void>) | undefined;
 afterEach(() => close?.());
 
 describe("GrantPilot MCP", () => {
-  it("discovers tools, defaults broad searches to 80, enforces explicit count limits, paginates, and serves the workbench", async () => {
+  it("discovers tools, returns all graph-ready records at once, silently serves details, and serves the workbench", async () => {
     const [a, b] = InMemoryTransport.createLinkedPair();
     const server = createGrantPilotMcpServer();
     const client = new Client({ name: "test", version: "1" });
@@ -64,22 +64,31 @@ describe("GrantPilot MCP", () => {
     expect(output.context.projectBudget).toBeUndefined();
     expect(output.context.minimumAward).toBeUndefined();
     expect(output.context.maximumAward).toBeUndefined();
+    expect(output.allRecordsLoaded).toBe(true);
+    expect(output.hasMore).toBe(false);
+    expect(output.grants).toHaveLength(output.totalResultCount);
     expect(output.grants.every((grant: any) =>
-      grant.score.components.programSizeFit.reasons[0].includes("No target award size was requested"))).toBe(true);
+      grant.id && grant.title && grant.components.length === 6)).toBe(true);
     const responseText = (result.content as any)[0].text as string;
     expect(responseText).toContain("## Current Federal Opportunities (Open/Active)");
     expect(responseText).toContain("## Historical Private-Foundation Prospects");
     expect(responseText).toContain("Evidence-backed potential private donor/funder candidates worth researching and possibly contacting.");
     for (const grant of output.grants) {
       expect(responseText).toContain(
-        grant.opportunity.source === "irs-990pf"
-          ? grant.opportunity.funderName
-          : grant.opportunity.title,
+        grant.source === "irs-990pf" ? grant.funder : grant.title,
       );
     }
     expect(Buffer.byteLength(JSON.stringify(result))).toBeLessThan(48 * 1024);
 
-    const selectedIds = output.grants.slice(0, 2).map((grant: any) => grant.opportunity.id);
+    const detailResult = await client.callTool({
+      name: "get_grant_details",
+      arguments: { grantId: output.grants[0].id },
+    });
+    const detail = detailResult.structuredContent as any;
+    expect(detail.opportunity.id).toBe(output.grants[0].id);
+    expect(detail.score.components.programSizeFit.reasons[0]).toContain("No target award size was requested");
+
+    const selectedIds = output.grants.slice(0, 2).map((grant: any) => grant.id);
     const comparison = await client.callTool({
       name: "compare_grants",
       arguments: { grantIds: selectedIds },
@@ -89,28 +98,14 @@ describe("GrantPilot MCP", () => {
     expect(comparisonOutput.grants[0].componentScores).toBeTruthy();
     expect((comparison.content as any)[0].text).toContain("primary pursuit");
 
-    if (output.hasMore) {
-      const more = await client.callTool({
-        name: "load_more_grants",
-        arguments: { queryId: output.queryId },
-      });
-      const page = more.structuredContent as any;
-      expect(page.append).toBe(true);
-      expect(page.grants.length).toBeGreaterThan(0);
-      expect(page.grants.some((grant: any) =>
-        output.grants.some((first: any) => first.opportunity.id === grant.opportunity.id))).toBe(false);
-      expect(Buffer.byteLength(JSON.stringify(more))).toBeLessThan(48 * 1024);
-
-      if (page.hasMore) {
-        const next = await client.callTool({
-          name: "load_more_grants",
-          arguments: { queryId: output.queryId },
-        });
-        const nextPage = next.structuredContent as any;
-        expect(nextPage.grants.some((grant: any) =>
-          page.grants.some((prior: any) => prior.opportunity.id === grant.opportunity.id))).toBe(false);
-      }
-    }
+    const more = await client.callTool({
+      name: "load_more_grants",
+      arguments: { queryId: output.queryId },
+    });
+    const moreOutput = more.structuredContent as any;
+    expect(moreOutput.allRecordsLoaded).toBe(true);
+    expect(moreOutput.hasMore).toBe(false);
+    expect(moreOutput.grants).toEqual([]);
 
     const foodPrompt = "Find 30 possible grants for a New York nonprofit which provides free food. We need between $100,000 and $500,000.";
     const foodResult = await client.callTool({
@@ -124,10 +119,16 @@ describe("GrantPilot MCP", () => {
     expect(food.context.minimumAward).toBe(100_000);
     expect(food.context.maximumAward).toBe(500_000);
     expect(food.grants.length).toBeGreaterThan(0);
-    expect(food.grants.every((grant: any) =>
-      grant.score.components.missionAlignment.score >= 45)).toBe(true);
-    expect(food.grants.every((grant: any) =>
-      !grant.score.components.geographicFit.reasons.some((reason: string) => /Washington/i.test(reason)))).toBe(true);
+    expect(food.grants.every((grant: any) => grant.components[0] >= 45)).toBe(true);
+    expect(food.grants).toHaveLength(food.totalResultCount);
+    const foodDetail = await client.callTool({
+      name: "get_grant_details",
+      arguments: { grantId: food.grants[0].id },
+    });
+    expect(
+      (foodDetail.structuredContent as any).score.components.geographicFit.reasons
+        .some((reason: string) => /Washington/i.test(reason)),
+    ).toBe(false);
     expect((foodResult.content as any)[0].text).toContain("Unrelated records were excluded");
 
     const resource = await client.readResource({ uri: GRANTPILOT_WIDGET_URI });

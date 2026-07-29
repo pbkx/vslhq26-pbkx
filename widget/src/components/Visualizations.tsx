@@ -12,6 +12,11 @@ import {
   type ViewId,
 } from "../grantView";
 import { SelectControl } from "./SelectControl";
+import {
+  adaptiveAwardDomain,
+  adaptiveDeadlineHorizon,
+  adaptivePercentDomain,
+} from "../chartScales";
 
 type Props = {
   view: ViewId;
@@ -22,9 +27,7 @@ type Props = {
 };
 
 const MATRIX_PAD = { top: 6, bottom: 12, left: 8, right: 5 };
-const DEADLINE_HORIZON = 365;
 const DEADLINE_REFERENCE_LINES = [30, 60, 90];
-const DEADLINE_TICKS = [0, 60, 120, 180, 240, 300, 360];
 
 function ChartHeader({ title, subtitle, children }: { title: string; subtitle: string; children?: React.ReactNode }) {
   return (
@@ -79,13 +82,22 @@ function MatchMatrix({ grants, selectedId, onSelect }: Omit<Props, "view" | "con
   const [hoverId, setHoverId] = useState<string | null>(null);
   const plotWidth = 100 - MATRIX_PAD.left - MATRIX_PAD.right;
   const plotHeight = 100 - MATRIX_PAD.top - MATRIX_PAD.bottom;
-  const x = (effort: number) => MATRIX_PAD.left + (effort / 100) * plotWidth;
-  const y = (score: number) => MATRIX_PAD.top + (1 - score / 100) * plotHeight;
+  const effortDomain = adaptivePercentDomain(grants.map((grant) => grant.chart.applicationEffort), 25);
+  const scoreDomain = adaptivePercentDomain(grants.map((grant) => grant.score.overallScore), 20);
+  const scale = (value: number, minimum: number, maximum: number) =>
+    Math.max(0, Math.min(1, (value - minimum) / Math.max(1, maximum - minimum)));
+  const x = (effort: number) => MATRIX_PAD.left +
+    scale(effort, effortDomain.minimum, effortDomain.maximum) * plotWidth;
+  const y = (score: number) => MATRIX_PAD.top +
+    (1 - scale(score, scoreDomain.minimum, scoreDomain.maximum)) * plotHeight;
   const active = grants.find((grant) => grant.opportunity.id === hoverId);
 
   return (
     <section className="visual-card original-visual matrix-visual">
-      <ChartHeader title="Match Matrix" subtitle="Match score vs. application effort · bubble size = award amount">
+      <ChartHeader
+        title="Match Matrix"
+        subtitle={`Axes fit filtered results · match ${scoreDomain.minimum}–${scoreDomain.maximum} · effort ${effortDomain.minimum}–${effortDomain.maximum} · bubble size = award amount`}
+      >
         <div className="legend original-legend">
           <span><i className="federal" />Grants.gov</span>
           <span><i className="private" />IRS prospect</span>
@@ -147,43 +159,6 @@ const AWARD_SORT_OPTIONS = [
   { value: "title", label: "Sort: Title" },
 ];
 
-function niceAwardDomain(value: number) {
-  const minimum = Math.max(value, 10_000);
-  const magnitude = 10 ** Math.floor(Math.log10(minimum));
-  const normalized = minimum / magnitude;
-  const ceiling = normalized <= 1 ? 1 : normalized <= 2 ? 2 : normalized <= 2.5 ? 2.5 : normalized <= 5 ? 5 : 10;
-  return ceiling * magnitude;
-}
-
-function percentile(sortedValues: number[], ratio: number) {
-  if (!sortedValues.length) return 0;
-  const index = (sortedValues.length - 1) * ratio;
-  const lower = Math.floor(index);
-  const upper = Math.ceil(index);
-  if (lower === upper) return sortedValues[lower]!;
-  return sortedValues[lower]! + (sortedValues[upper]! - sortedValues[lower]!) * (index - lower);
-}
-
-function adaptiveAwardDomain(grants: GrantResult[], targetMinimum?: number, targetMaximum?: number) {
-  const values = grants
-    .flatMap((grant) => [grant.opportunity.awardMin, grant.opportunity.awardMax])
-    .filter((value): value is number => value !== undefined && value > 0)
-    .sort((a, b) => a - b);
-  const requestedMaximum = Math.max(targetMinimum ?? 0, targetMaximum ?? 0);
-  if (!values.length) return niceAwardDomain(Math.max(requestedMaximum, 100_000));
-
-  const largest = values[values.length - 1]!;
-  if (values.length < 5) return niceAwardDomain(Math.max(largest, requestedMaximum) * 1.05);
-
-  const firstQuartile = percentile(values, 0.25);
-  const thirdQuartile = percentile(values, 0.75);
-  const upperFence = thirdQuartile + 1.5 * Math.max(0, thirdQuartile - firstQuartile);
-  const inlierValues = values.filter((value) => value <= upperFence);
-  const inlierMaximum = inlierValues[inlierValues.length - 1] ?? largest;
-  const robustMaximum = largest > inlierMaximum * 2.5 ? inlierMaximum : largest;
-  return niceAwardDomain(Math.max(robustMaximum, requestedMaximum) * 1.05);
-}
-
 function AwardFit({ grants, selectedId, onSelect, context }: Omit<Props, "view">) {
   const [sort, setSort] = useState<AwardSort>("score");
   const rows = useMemo(() => {
@@ -200,8 +175,6 @@ function AwardFit({ grants, selectedId, onSelect, context }: Omit<Props, "view">
   const hasTarget = targetMinimum !== undefined || targetMaximum !== undefined;
   const largestAward = Math.max(
     0,
-    targetMinimum ?? 0,
-    targetMaximum ?? 0,
     ...grants.map((grant) => grant.opportunity.awardMax ?? grant.opportunity.awardMin ?? 0),
   );
   const awardDomainMax = adaptiveAwardDomain(grants, targetMinimum, targetMaximum);
@@ -216,12 +189,12 @@ function AwardFit({ grants, selectedId, onSelect, context }: Omit<Props, "view">
   };
   const subtitle = targetMinimum !== undefined && targetMaximum !== undefined
     ? targetMinimum === targetMaximum
-      ? `Award ranges vs. your ${formatMoney(targetMinimum)} target`
-      : `Award ranges vs. your ${formatMoney(targetMinimum)}–${formatMoney(targetMaximum)} target band`
+      ? `Award ranges vs. your ${formatMoney(targetMinimum)} target · axis fits matched awards`
+      : `Award ranges vs. your ${formatMoney(targetMinimum)}–${formatMoney(targetMaximum)} target band · axis fits matched awards`
     : targetMinimum !== undefined
-      ? `Award ranges vs. your minimum target of ${formatMoney(targetMinimum)}`
+      ? `Award ranges vs. your minimum target of ${formatMoney(targetMinimum)} · axis fits matched awards`
       : targetMaximum !== undefined
-        ? `Award ranges vs. your maximum target of ${formatMoney(targetMaximum)}`
+        ? `Award ranges vs. your maximum target of ${formatMoney(targetMaximum)} · axis fits matched awards`
         : hasAwardOverflow
           ? "Award ranges across matched opportunities · adaptive scale; larger outliers are marked at the edge"
           : "Award ranges across matched opportunities · no target amount requested";
@@ -397,10 +370,6 @@ function ScoreHeatmap({ grants, selectedId, onSelect }: Omit<Props, "view" | "co
   );
 }
 
-function deadlineX(days: number) {
-  return 4 + (days / DEADLINE_HORIZON) * 92;
-}
-
 function markerSize(grant: GrantResult) {
   const value = grant.opportunity.awardMax ?? grant.opportunity.awardMin ?? 20_000;
   return 14 + Math.min(1, value / 800_000) * 16;
@@ -421,25 +390,29 @@ function markerTone(score: number) {
 }
 
 function Deadlines({ grants, selectedId, onSelect }: Omit<Props, "view" | "context">) {
-  const federal = grants
+  const datedFederal = grants
     .filter((grant) => grant.opportunity.source === "grants-gov" && grant.opportunity.deadline)
     .map((grant) => ({ grant, days: grant.chart.daysRemaining ?? 0 }))
-    .filter(({ days }) => days >= 0 && days <= DEADLINE_HORIZON);
+    .filter(({ days }) => days >= 0 && days <= 365);
+  const horizon = adaptiveDeadlineHorizon(datedFederal.map(({ days }) => days));
+  const federal = datedFederal.filter(({ days }) => days <= horizon);
+  const deadlineX = (days: number) => 4 + (days / horizon) * 92;
+  const deadlineTicks = Array.from({ length: 7 }, (_, index) => horizon * index / 6);
   const historical = grants.filter((grant) => grant.opportunity.source === "irs-990pf");
 
   return (
     <section className="visual-card original-visual deadlines-visual content-fit-visual">
-      <ChartHeader title="Deadlines" subtitle="Current federal opportunities over the next 12 months · marker size = award, color = match" />
+      <ChartHeader title="Deadlines" subtitle={`Current federal opportunities over the next ${horizon} days · marker size = award, color = match`} />
       <div className="original-deadlines">
         <p className="deadline-lane-label">Open federal opportunities</p>
         <div className="deadline-timeline">
-          {DEADLINE_TICKS.map((days) => (
+          {deadlineTicks.map((days) => (
             <div key={days} className="deadline-month-line" style={{ left: `${deadlineX(days)}%` }}>
               <i />
-              <span>{monthLabel(days)}</span>
+              <span>{horizon <= 120 ? `${Math.round(days)}d` : monthLabel(days)}</span>
             </div>
           ))}
-          {DEADLINE_REFERENCE_LINES.map((days) => (
+          {DEADLINE_REFERENCE_LINES.filter((days) => days < horizon).map((days) => (
             <div key={days} className="deadline-reference" style={{ left: `${deadlineX(days)}%` }}>
               <i />
               <span>{days}d</span>

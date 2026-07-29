@@ -107,7 +107,7 @@ export function inferAwardRange(query?:string){
  if(values.length>=2&&/(between|from|range|through|–|—|-)/i.test(query))
   return{minimumAward:Math.min(values[0]!,values[1]!),maximumAward:Math.max(values[0]!,values[1]!)};
  const one=values[0];
- if(one!==undefined&&/(up to|maximum|ceiling|no more than)/i.test(query))return{maximumAward:one};
+ if(one!==undefined&&/(up to|maximum|ceiling|no more than|below|under|less than|fewer than)/i.test(query))return{maximumAward:one};
  if(one!==undefined&&/(at least|minimum|floor|more than)/i.test(query))return{minimumAward:one};
  if(one!==undefined&&/\b(?:seeking|request(?:ing)?|need(?:ing)?|target(?:ing)?|award|grant amount|project budget)(?:\s+(?:about|around|of|is|for))?\s*\$?/i.test(query))
   return{minimumAward:one,maximumAward:one};

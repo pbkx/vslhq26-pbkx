@@ -41,4 +41,13 @@ describe("prompt-derived search profiles", () => {
     expect(project.title).toBe("Food Access and Hunger Relief");
     expect(project.estimatedBudget).toBeUndefined();
   });
+
+  it("interprets below an amount as a maximum rather than an exact award", () => {
+    const { project } = inferProfilesFromQuery(
+      "Find hunger-relief grants for a Washington nonprofit with awards below $500,000.",
+    );
+
+    expect(project.title).toBe("Food Access and Hunger Relief");
+    expect(project.estimatedBudget).toBe(500_000);
+  });
 });

@@ -21,6 +21,8 @@ describe("multi-source search",()=>{
  it("uses award constraints only when the authoritative request states them",async()=>{
   expect(inferAwardRange("Find grants for a nonprofit food pantry.")).toEqual({});
   expect(inferAwardRange("Find grants for a nonprofit food pantry seeking $250,000.")).toEqual({minimumAward:250000,maximumAward:250000});
+  expect(inferAwardRange("Find grants for a food pantry with awards below $500,000.")).toEqual({maximumAward:500000});
+  expect(inferAwardRange("Find grants under $250K for hunger relief.")).toEqual({maximumAward:250000});
   const result=await searchGrants({
    query:"Find grants for a Washington nonprofit teaching practical AI skills.",
    organization:demoOrganization,
@@ -32,5 +34,19 @@ describe("multi-source search",()=>{
   expect(result.grants.length).toBeGreaterThan(0);
   expect(result.grants.every(item=>item.score.components.programSizeFit.reasons[0]?.includes("No target award size was requested"))).toBe(true);
  });
+ it("treats below an amount as a ceiling and returns relevant hunger-relief records",async()=>{
+  const query="Find hunger-relief funding opportunities for a Washington nonprofit with awards below $500,000.";
+  const result=await searchGrants({
+   query,
+   organization:demoOrganization,
+   project:demoProject,
+   resultTypes:["current-federal","forecasted-federal","historical-private-prospect"],
+   limit:80,
+  });
+  expect(result.awardRange).toEqual({minimumAward:undefined,maximumAward:500000});
+  expect(result.grants.length).toBeGreaterThan(0);
+  expect(result.grants.every(item=>item.score.components.missionAlignment.score>=45)).toBe(true);
+  expect(result.grants.every(item=>(item.opportunity.awardMin??Number.POSITIVE_INFINITY)<=500000)).toBe(true);
+ },30_000);
  it("rescores cached grants without a provider search",async()=>{const result=await searchGrants({organization:demoOrganization,project:demoProject,limit:10});const next=rescoreGrants(result.queryId,result.grants.map(x=>x.opportunity.id),{...DEFAULT_WEIGHTS,missionAlignment:.2,applicantEligibility:.3});expect(next.weights.applicantEligibility).toBe(.3);expect(next.grants).toHaveLength(result.grants.length)});
 });

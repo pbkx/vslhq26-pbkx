@@ -3,109 +3,114 @@ const weights=z.object({missionAlignment:z.number(),applicantEligibility:z.numbe
 const geography=z.object({country:z.string().optional(),states:z.array(z.string()).optional(),nationwide:z.boolean().optional(),description:z.string().optional()});
 const organization=z.object({id:z.string().optional(),name:z.string().optional(),organizationType:z.string().optional(),taxStatus:z.string().optional(),headquarters:z.object({city:z.string().optional(),state:z.string().optional(),country:z.string().optional()}).optional(),serviceAreas:z.array(geography).optional(),missionTopics:z.array(z.string()).optional(),populationsServed:z.array(z.string()).optional(),annualBudget:z.number().optional(),priorAnnualRevenue:z.number().optional(),canProvideCostShare:z.boolean().optional(),applicationCapacity:z.enum(["low","medium","high"]).optional()});
 const project=z.object({id:z.string().optional(),title:z.string().optional(),summary:z.string().optional(),topics:z.array(z.string()).optional(),targetPopulations:z.array(z.string()).optional(),geographicAreas:z.array(geography).optional(),estimatedBudget:z.number().optional(),desiredStartDate:z.string().optional(),durationMonths:z.number().optional()});
-// Reserve room for the human-readable, one-record-at-a-time summary that
-// accompanies structuredContent. This keeps the complete MCP result safely
-// below Copilot's practical payload ceiling and moves overflow into load_more.
-const SAFE_TOOL_RESULT_BYTES=38*1024;
 export const DEFAULT_SEARCH_RESULTS=80;
 export const searchGrantsSchema=z.object({organization:organization.optional().describe("Known nonprofit profile. Supply only fields supported by the conversation."),project:project.optional().describe("Known project profile. Supply only fields supported by the conversation. Never invent estimatedBudget; omit it unless the user explicitly stated a budget or desired award amount."),query:z.string().optional().describe("The user's complete natural-language grant request, including mission, geography, population, any award range actually stated, and requested count. Do not shorten this to generic keywords; this text is authoritative when it conflicts with inferred fields. If it contains no award amount, GrantPilot searches all award sizes and ignores model-invented defaults."),sources:z.array(z.enum(["grants-gov","irs-990pf"])).optional().describe("Low-level provider filter. Prefer resultTypes when the user specifies current, forecasted, or historical results."),resultTypes:z.array(z.enum(["current-federal","forecasted-federal","historical-private-prospect"])).min(1).optional().describe("Exact record types to return. Use current-federal for currently open Grants.gov opportunities, forecasted-federal for upcoming federal opportunities, and historical-private-prospect for IRS 990-PF giving evidence. Omit historical-private-prospect when the user does not want historical results."),filters:z.object({deadlineAfter:z.string().optional(),deadlineBefore:z.string().optional(),minimumAward:z.number().optional().describe("Use only when the user explicitly stated a minimum award amount."),maximumAward:z.number().optional().describe("Use only when the user explicitly stated a maximum award amount."),excludeCostShare:z.boolean().optional(),onlyOpen:z.boolean().describe("Restrict federal opportunities to open status. This does not select record types; use resultTypes for that.").optional(),minimumScore:z.number().optional()}).optional(),weights:weights.optional(),requestedResultCount:z.number().int().optional().describe(`Use only when the user explicitly requests an exact number of grants in their prompt. Otherwise omit it; GrantPilot defaults to ${DEFAULT_SEARCH_RESULTS}. The supported range is 1–${MAX_SEARCH_RESULTS}. Never invent a default of 10 and never silently reduce a larger request.`),limit:z.number().int().optional().describe("Deprecated alias for requestedResultCount. Omit unless the user explicitly requested an exact count."),refreshData:z.boolean().describe("When true, bypass the normalized result cache and attempt targeted Grants.gov API verification for up to three selected federal results. It never scans raw XML.").default(false)});
 export const REQUIRED_TOOLS=["search_grants","load_more_grants","get_grant_details","rescore_grants","compare_grants","create_grant_watch","list_grant_watches","delete_grant_watch","get_project_ideas"] as const;
-const compactSearchOutput=(output:ReturnType<typeof grantRepository.getSearch>,offset=0)=>{
- const records=output.grants.slice(offset).map(item=>({opportunity:{id:item.opportunity.id,source:item.opportunity.source,recordCategory:item.opportunity.recordCategory,title:item.opportunity.title,funderName:item.opportunity.funderName,summary:item.opportunity.summary.slice(0,300),awardMin:item.opportunity.awardMin,awardMax:item.opportunity.awardMax,deadline:item.opportunity.deadline,requiresCostShare:item.opportunity.requiresCostShare,sourceUrl:item.opportunity.sourceUrl,applicationUrl:item.opportunity.applicationUrl,sourceDisclaimer:item.opportunity.sourceDisclaimer.slice(0,160),lastVerifiedAt:item.opportunity.lastVerifiedAt,requirements:item.opportunity.requirements.slice(0,1).map(requirement=>({text:requirement.text.slice(0,140)}))},score:{overallScore:item.score.overallScore,eligibilityStatus:item.score.eligibilityStatus,components:Object.fromEntries(Object.entries(item.score.components).map(([key,component])=>[key,{score:component.score,weight:component.weight,weightedContribution:component.weightedContribution,confidence:component.confidence,reasons:component.reasons.slice(0,1),missingData:component.missingData.slice(0,1)}])),hardExclusions:item.score.hardExclusions.slice(0,1),warnings:item.score.warnings.slice(0,1)},chart:item.chart}));
- const base={queryId:output.queryId,searchedAt:output.searchedAt,weights:output.weights,warnings:output.warnings,totalResultCount:output.grants.length,offset,append:offset>0,context:{organizationName:output.organization.name,organizationLocation:[output.organization.headquarters.city,output.organization.headquarters.state].filter(Boolean).join(", "),projectTitle:output.project.title,projectSummary:output.project.summary.slice(0,240),projectBudget:output.project.estimatedBudget,minimumAward:output.awardRange?.minimumAward,maximumAward:output.awardRange?.maximumAward,targetPopulations:output.project.targetPopulations.slice(0,4)}};
- const grants:typeof records=[];
- for(const record of records){
-  const candidate={...base,resultCount:grants.length+1,sourceCounts:{"grants-gov":0,"irs-990pf":0},grants:[...grants,record]};
-  if(Buffer.byteLength(JSON.stringify(candidate))>SAFE_TOOL_RESULT_BYTES)break;
-  grants.push(record);
- }
- const sourceCounts={"grants-gov":grants.filter(item=>item.opportunity.source==="grants-gov").length,"irs-990pf":grants.filter(item=>item.opportunity.source==="irs-990pf").length};
- const nextOffset=offset+grants.length;
- return{...base,resultCount:grants.length,sourceCounts,grants,nextOffset,hasMore:nextOffset<output.grants.length};
-};
-type CompactSearchPage=ReturnType<typeof compactSearchOutput>;
-type CompactGrant=CompactSearchPage["grants"][number];
+const SCORE_COMPONENT_KEYS=[
+ "missionAlignment",
+ "applicantEligibility",
+ "geographicFit",
+ "programSizeFit",
+ "historicalSimilarity",
+ "deadlineFeasibility",
+]as const;
+type SearchResult=ReturnType<typeof grantRepository.getSearch>;
+type SearchGrant=SearchResult["grants"][number];
+const workbenchSearchOutput=(output:SearchResult)=>({
+ queryId:output.queryId,
+ searchedAt:output.searchedAt,
+ resultCount:output.grants.length,
+ totalResultCount:output.grants.length,
+ sourceCounts:output.sourceCounts,
+ weights:output.weights,
+ warnings:output.warnings.slice(0,3),
+ offset:0,
+ nextOffset:output.grants.length,
+ hasMore:false,
+ append:false,
+ allRecordsLoaded:true,
+ compactGraphPayload:true,
+ context:{
+  organizationName:output.organization.name,
+  organizationLocation:[output.organization.headquarters.city,output.organization.headquarters.state].filter(Boolean).join(", "),
+  projectTitle:output.project.title,
+  projectSummary:output.project.summary.slice(0,180),
+  projectBudget:output.project.estimatedBudget,
+  minimumAward:output.awardRange?.minimumAward,
+  maximumAward:output.awardRange?.maximumAward,
+  targetPopulations:output.project.targetPopulations.slice(0,4),
+ },
+ grants:output.grants.map(item=>({
+  id:item.opportunity.id,
+  title:item.opportunity.title,
+  funder:item.opportunity.funderName,
+  source:item.opportunity.source,
+  category:item.opportunity.recordCategory,
+  awardMin:item.opportunity.awardMin,
+  awardMax:item.opportunity.awardMax,
+  deadline:item.opportunity.deadline,
+  costShare:item.opportunity.requiresCostShare,
+  sourceUrl:item.opportunity.sourceUrl,
+  applicationUrl:item.opportunity.applicationUrl,
+  score:item.score.overallScore,
+  eligibility:item.score.eligibilityStatus,
+  effort:item.chart.applicationEffort,
+  days:item.chart.daysRemaining,
+  components:SCORE_COMPONENT_KEYS.map(key=>Math.round(item.score.components[key].score)),
+  confidence:Math.round(SCORE_COMPONENT_KEYS.reduce((sum,key)=>sum+item.score.components[key].confidence,0)/SCORE_COMPONENT_KEYS.length),
+ })),
+});
+export type WorkbenchSearchOutput=ReturnType<typeof workbenchSearchOutput>;
 const responseMoney=(value?:number)=>{
  if(value===undefined)return"Not stated";
  if(value>=1_000_000)return`$${(value/1_000_000).toFixed(value%1_000_000?1:0)}M`;
  if(value>=1_000)return`$${Math.round(value/1_000)}K`;
  return`$${value.toLocaleString()}`;
 };
-const responseAward=(grant:CompactGrant)=>{
+const responseAward=(grant:SearchGrant)=>{
  const{awardMin,awardMax}=grant.opportunity;
  if(awardMin===undefined&&awardMax===undefined)return"Not stated";
  if(awardMin!==undefined&&awardMax!==undefined&&awardMin!==awardMax)return`${responseMoney(awardMin)}–${responseMoney(awardMax)}`;
  return responseMoney(awardMax??awardMin);
 };
-const responseEligibility=(grant:CompactGrant)=>{
- const value=grant.score.eligibilityStatus;
- if(value==="confirmed"||value==="likely")return"Likely eligible based on indexed evidence; verify the official notice.";
- if(value==="likely-ineligible")return"Likely ineligible; review the identified exclusion before investing application effort.";
- return"Eligibility requires verification against the original source.";
-};
-const federalRecord=(grant:CompactGrant,index:number)=>[
- `${index+1}. **${grant.opportunity.title}**`,
- `   - Funder: ${grant.opportunity.funderName}`,
- `   - Summary: ${grant.opportunity.summary.replace(/\s+/g," ").trim()}`,
- `   - Award range: ${responseAward(grant)}`,
- `   - Deadline: ${grant.opportunity.deadline??"Not stated in the indexed record"}`,
- `   - Eligibility: ${responseEligibility(grant)}`,
- `   - Cost share: ${grant.opportunity.requiresCostShare?"Required":"Not indicated as required in the indexed record"}`,
- `   - Match score: ${grant.score.overallScore}/100`,
-].join("\n");
-const historicalRecord=(grant:CompactGrant,index:number)=>[
- `${index+1}. **${grant.opportunity.funderName}**`,
- `   - Historical giving record: ${grant.opportunity.title}`,
- `   - Historical award range: ${responseAward(grant)}`,
- `   - Potential donor signal: ${grant.score.components.missionAlignment.reasons[0]??"Past giving overlaps with the requested mission evidence."}`,
- `   - Match score: ${grant.score.overallScore}/100`,
- `   - Status: Evidence-backed potential private donor/funder candidate worth researching and possibly contacting.`,
-].join("\n");
-const standardizedSearchResponse=(
- output:ReturnType<typeof grantRepository.getSearch>,
- page:CompactSearchPage,
- mode:"search"|"more"="search",
-)=>{
- const current=page.grants.filter(grant=>grant.opportunity.recordCategory==="current-federal-opportunity");
- const forecasted=page.grants.filter(grant=>grant.opportunity.recordCategory==="forecasted-federal-opportunity");
- const historical=page.grants.filter(grant=>grant.opportunity.recordCategory==="private-funder-prospect");
+const federalRecord=(grant:SearchGrant,index:number)=>
+ `${index+1}. **${grant.opportunity.title}** — ${grant.opportunity.funderName} · ${grant.score.overallScore}/100 · ${responseAward(grant)} · ${grant.opportunity.deadline??"deadline not stated"}`;
+const historicalRecord=(grant:SearchGrant,index:number)=>
+ `${index+1}. **${grant.opportunity.funderName}** — ${grant.score.overallScore}/100 · historical awards ${responseAward(grant)}`;
+const standardizedSearchResponse=(output:SearchResult)=>{
+ const current=output.grants.filter(grant=>grant.opportunity.recordCategory==="current-federal-opportunity");
+ const forecasted=output.grants.filter(grant=>grant.opportunity.recordCategory==="forecasted-federal-opportunity");
+ const historical=output.grants.filter(grant=>grant.opportunity.recordCategory==="private-funder-prospect");
  const searchedSources=[
   output.sourceCounts["grants-gov"]?"current or forecasted federal opportunities":"",
   output.sourceCounts["irs-990pf"]?"historical private-foundation prospects":"",
  ].filter(Boolean).join(" and ")||"grant records";
- const intro=mode==="search"
-  ?`I searched ${searchedSources} relevant to **${output.organization.name}** and found **${output.resultCount} matching records**. The first ${page.resultCount} returned results include ${current.length} current federal opportunities, ${forecasted.length} forecasted federal opportunities, and ${historical.length} historical foundation funding prospects.`
-  :`I loaded **${page.resultCount} additional matching records** from the cached GrantPilot search (${page.nextOffset} of ${page.totalResultCount} delivered) without rescanning providers.`;
  const sections=[
-  intro,
+  `I searched ${searchedSources} relevant to **${output.organization.name}** and returned all **${output.resultCount} matching records** to the GrantPilot workbench: ${current.length} current federal opportunities, ${forecasted.length} forecasted federal opportunities, and ${historical.length} historical foundation funding prospects.`,
   "## Current Federal Opportunities (Open/Active)",
-  current.length?current.map(federalRecord).join("\n\n"):"No current federal opportunities in this returned page passed the relevance and eligibility gates.",
+  current.length?current.map(federalRecord).join("\n"):"No current federal opportunities passed the relevance and eligibility gates.",
  ];
  if(forecasted.length)sections.push(
   "## Forecasted Federal Opportunities",
-  forecasted.map(federalRecord).join("\n\n"),
+  forecasted.map(federalRecord).join("\n"),
  );
  sections.push(
   "## Historical Private-Foundation Prospects",
   "**Why these prospects are useful:** Evidence-backed potential private donor/funder candidates worth researching and possibly contacting.",
-  historical.length?historical.map(historicalRecord).join("\n\n"):"No historical private-foundation prospects appear in this returned page.",
+  historical.length?historical.map(historicalRecord).join("\n"):"No historical private-foundation prospects passed the relevance gates.",
   "**Search quality:** Unrelated records were excluded rather than used to pad the requested result count.",
  );
  if(output.project.title==="Community Program")sections.push(
   "## Search Note",
   "No specific nonprofit mission area was supplied, so the search is necessarily broad. Add a program area or population served to produce more decision-useful matches.",
  );
- if(page.hasMore)sections.push(
-  `**Additional results are available:** ${page.totalResultCount-page.nextOffset} more matched records remain in the cached search. Use \`load_more_grants\` with queryId \`${page.queryId}\` and nextOffset \`${page.nextOffset}\`.`,
- );
  return sections.join("\n\n");
 };
 export function registerGrantTools(server:McpServer){
- const deliveryOffsets=new Map<string,number>();
- registerAppTool(server,"search_grants",{title:"Search and rank grants",description:`Search and rank the complete local Grants.gov index plus indexed IRS 990-PF historical giving. MUST be used for grant discovery. Always pass the user's full natural-language request in query so GrantPilot can derive mission, population, geography, and only award constraints the user actually stated; do not reduce query to generic keywords. Never invent a project budget, minimum award, maximum award, or default award band. If the query contains no award amount, omit project.estimatedBudget and filters.minimumAward/maximumAward so GrantPilot searches all award sizes. If the user does not explicitly request an exact count, omit requestedResultCount and GrantPilot will target ${DEFAULT_SEARCH_RESULTS} results; do not choose 10 as a generic default. Use requestedResultCount only for an exact count present in the user's prompt; the supported maximum is ${MAX_SEARCH_RESULTS}. For "more" or "next" results from an existing query, call load_more_grants instead of search_grants. Return only records found by this tool: never supplement results with funders or opportunities from general model knowledge. Preserve the standardized response sections returned by this tool and list every record in the returned page one by one; do not collapse the page into a few notable examples. Grants.gov can represent current opportunities. Frame IRS results as evidence-backed potential private donor/funder candidates worth researching and possibly contacting.`,inputSchema:searchGrantsSchema,annotations:{readOnlyHint:true,openWorldHint:true},_meta:{ui:{resourceUri:GRANTPILOT_WIDGET_URI,visibility:["model"]}}},async args=>{const inferredRequested=inferRequestedResultCount(args.query);const suppliedRequested=args.requestedResultCount??args.limit;const invalidSupplied=suppliedRequested!==undefined&&(suppliedRequested<1||suppliedRequested>MAX_SEARCH_RESULTS);const requested=invalidSupplied?suppliedRequested:inferredRequested??(suppliedRequested===10&&args.query?.trim()?DEFAULT_SEARCH_RESULTS:suppliedRequested??DEFAULT_SEARCH_RESULTS);console.log(`[mcp] tools/call search_grants requested=${requested} resultTypes=${args.resultTypes?.join(",")??"mixed"} refresh=${args.refreshData}`);if(requested<1||requested>MAX_SEARCH_RESULTS)return{isError:true,content:[{type:"text",text:`GrantPilot can return between 1 and ${MAX_SEARCH_RESULTS} ranked grants per search. You requested ${requested}. Please request ${MAX_SEARCH_RESULTS} or fewer, or narrow the grant type, topic, geography, award range, or deadline.`}],structuredContent:{error:{code:"RESULT_LIMIT_EXCEEDED",requestedResultCount:requested,minimumResultCount:1,maximumResultCount:MAX_SEARCH_RESULTS}}};try{const{requestedResultCount:_requested,limit:_legacyLimit,...searchArgs}=args;const profiles=mergeProfilesFromRequest(args.query,args.organization as any,args.project as any);const output=await searchGrants({...searchArgs,limit:requested,...profiles});const compact=compactSearchOutput(output);deliveryOffsets.set(compact.queryId,compact.nextOffset);return{content:[{type:"text",text:standardizedSearchResponse(output,compact)}],structuredContent:compact}}catch(error){const message=error instanceof Error?error.message:"Unknown search failure";console.error(`[mcp] search_grants failed: ${message}`);return{isError:true,content:[{type:"text",text:"GrantPilot reached its grant index but the search failed before records could be returned. Do not substitute general-knowledge recommendations. Ask the user to retry once; if it repeats, report GRANT_SEARCH_FAILED to the GrantPilot operator."}],structuredContent:{error:{code:"GRANT_SEARCH_FAILED",message}}}}});
- server.registerTool("load_more_grants",{description:"Load the next payload-sized page from an existing cached GrantPilot search without rerunning search_grants or provider searches. For user requests such as more, next, or additional grants, use this tool with the prior queryId. Pass nextOffset when available; if omitted, GrantPilot advances its delivery cursor automatically. Preserve the standardized response sections and list every returned record one by one. Do not start a new 10-result search.",inputSchema:z.object({queryId:z.string(),offset:z.number().int().min(0).optional().describe("Use nextOffset from the previous search or load-more result. If omitted, the server advances from the last delivered page.")}),annotations:{readOnlyHint:true},_meta:{ui:{visibility:["app","model"]}}},async({queryId,offset})=>{const search=grantRepository.getSearch(queryId);const firstPageEnd=compactSearchOutput(search,0).nextOffset;const start=offset??deliveryOffsets.get(queryId)??firstPageEnd;console.log(`[mcp] tools/call load_more_grants offset=${start}`);const page=compactSearchOutput(search,start);deliveryOffsets.set(queryId,page.nextOffset);return{content:[{type:"text",text:standardizedSearchResponse(search,page,"more")}],structuredContent:page}});
+ registerAppTool(server,"search_grants",{title:"Search and rank grants",description:`Search and rank the complete local Grants.gov index plus indexed IRS 990-PF historical giving. MUST be used for grant discovery. Always pass the user's full natural-language request in query so GrantPilot can derive mission, population, geography, and only award constraints the user actually stated; do not reduce query to generic keywords. Never invent a project budget, minimum award, maximum award, or default award band. If the query contains no award amount, omit project.estimatedBudget and filters.minimumAward/maximumAward so GrantPilot searches all award sizes. If the user does not explicitly request an exact count, omit requestedResultCount and GrantPilot will target ${DEFAULT_SEARCH_RESULTS} results; do not choose 10 as a generic default. Use requestedResultCount only for an exact count present in the user's prompt; the supported maximum is ${MAX_SEARCH_RESULTS}. Return only records found by this tool: never supplement results with funders or opportunities from general model knowledge. The structured result includes every matched record in a compact graph-ready shape so the widget renders all charts and ranked rows immediately. Preserve the standardized response sections and list every returned record one by one. Grants.gov can represent current opportunities. Frame IRS results as evidence-backed potential private donor/funder candidates worth researching and possibly contacting.`,inputSchema:searchGrantsSchema,annotations:{readOnlyHint:true,openWorldHint:true},_meta:{ui:{resourceUri:GRANTPILOT_WIDGET_URI,visibility:["model"]}}},async args=>{const inferredRequested=inferRequestedResultCount(args.query);const suppliedRequested=args.requestedResultCount??args.limit;const invalidSupplied=suppliedRequested!==undefined&&(suppliedRequested<1||suppliedRequested>MAX_SEARCH_RESULTS);const requested=invalidSupplied?suppliedRequested:inferredRequested??(suppliedRequested===10&&args.query?.trim()?DEFAULT_SEARCH_RESULTS:suppliedRequested??DEFAULT_SEARCH_RESULTS);console.log(`[mcp] tools/call search_grants requested=${requested} resultTypes=${args.resultTypes?.join(",")??"mixed"} refresh=${args.refreshData}`);if(requested<1||requested>MAX_SEARCH_RESULTS)return{isError:true,content:[{type:"text",text:`GrantPilot can return between 1 and ${MAX_SEARCH_RESULTS} ranked grants per search. You requested ${requested}. Please request ${MAX_SEARCH_RESULTS} or fewer, or narrow the grant type, topic, geography, award range, or deadline.`}],structuredContent:{error:{code:"RESULT_LIMIT_EXCEEDED",requestedResultCount:requested,minimumResultCount:1,maximumResultCount:MAX_SEARCH_RESULTS}}};try{const{requestedResultCount:_requested,limit:_legacyLimit,...searchArgs}=args;const profiles=mergeProfilesFromRequest(args.query,args.organization as any,args.project as any);const output=await searchGrants({...searchArgs,limit:requested,...profiles});const workbench=workbenchSearchOutput(output);return{content:[{type:"text",text:standardizedSearchResponse(output)}],structuredContent:workbench}}catch(error){const message=error instanceof Error?error.message:"Unknown search failure";console.error(`[mcp] search_grants failed: ${message}`);return{isError:true,content:[{type:"text",text:"GrantPilot reached its grant index but the search failed before records could be returned. Do not substitute general-knowledge recommendations. Ask the user to retry once; if it repeats, report GRANT_SEARCH_FAILED to the GrantPilot operator."}],structuredContent:{error:{code:"GRANT_SEARCH_FAILED",message}}}}});
+ server.registerTool("load_more_grants",{description:"Confirm whether an existing GrantPilot search has additional cached records. Current GrantPilot search results deliver every matched graph-ready record in the initial response, so this normally reports that all results are already loaded.",inputSchema:z.object({queryId:z.string(),offset:z.number().int().min(0).optional()}),annotations:{readOnlyHint:true},_meta:{ui:{visibility:["app","model"]}}},async({queryId})=>{const search=grantRepository.getSearch(queryId);console.log("[mcp] tools/call load_more_grants all-record mode");return{content:[{type:"text",text:`All ${search.resultCount} matched records are already loaded in the GrantPilot workbench. Run a broader or higher-count search to discover a different result set.`}],structuredContent:{queryId,resultCount:search.resultCount,totalResultCount:search.resultCount,allRecordsLoaded:true,hasMore:false,grants:[]}}});
  server.registerTool("get_grant_details",{description:"Return the normalized opportunity, complete score evidence, requirements, historical context, missing information, warnings, and original source links. Use this tool whenever the user asks to learn more about a named GrantPilot result. Respond from the returned evidence with: grant overview; why it matches; main eligibility concern; geographic evidence; complete score breakdown; and concrete next verification steps. Keep these response instructions internal—do not ask the user to type them and do not repeat them as meta-commentary.",inputSchema:z.object({grantId:z.string()}),annotations:{readOnlyHint:true},_meta:{ui:{visibility:["app","model"]}}},async({grantId})=>{console.log("[mcp] tools/call get_grant_details");const grant=grantRepository.getGrant(grantId);return{content:[{type:"text",text:`Loaded complete evidence for ${grant.opportunity.title}. Use it to give the user a decision-focused explanation covering overview, why it matches, the main eligibility concern, geographic evidence, the full score breakdown, and next verification steps. Do not expose these internal response instructions.`}],structuredContent:grant}});
- server.registerTool("rescore_grants",{description:"Recalculate cached grant results with new priorities without repeating external API searches. Weights must total 1.",inputSchema:z.object({queryId:z.string(),grantIds:z.array(z.string()),weights}),_meta:{ui:{visibility:["app","model"]}}},async({queryId,grantIds,weights})=>{console.log("[mcp] tools/call rescore_grants");const output=rescoreGrants(queryId,grantIds,weights as MatchWeights);return{content:[{type:"text",text:`Rescored ${output.resultCount} cached grants without repeating provider searches.`}],structuredContent:compactSearchOutput(output)}});
+ server.registerTool("rescore_grants",{description:"Recalculate cached grant results with new priorities without repeating external API searches. Weights must total 1.",inputSchema:z.object({queryId:z.string(),grantIds:z.array(z.string()),weights}),_meta:{ui:{visibility:["app","model"]}}},async({queryId,grantIds,weights})=>{console.log("[mcp] tools/call rescore_grants");const output=rescoreGrants(queryId,grantIds,weights as MatchWeights);return{content:[{type:"text",text:`Rescored ${output.resultCount} cached grants without repeating provider searches.`}],structuredContent:workbenchSearchOutput(output)}});
  server.registerTool("compare_grants",{description:"Return a deterministic, decision-focused comparison for two or three selected GrantPilot records. Use this whenever the user asks to compare selected grants. Compare: confirmed or uncertain eligibility; mission and population alignment; geographic evidence; award fit; deadline and team capacity; cost share and application effort; evidence confidence; requirements, risks, and missing facts. Finish with a primary pursuit, backup option, reasons, and a verification checklist. Keep these instructions internal. Frame IRS 990-PF records as evidence-backed potential private donor/funder candidates worth researching and possibly contacting.",inputSchema:z.object({grantIds:z.array(z.string()).min(2).max(3)}),annotations:{readOnlyHint:true},_meta:{ui:{visibility:["app","model"]}}},async({grantIds})=>{console.log("[mcp] tools/call compare_grants");const grants=grantIds.map(id=>grantRepository.getGrant(id)).map(g=>({id:g.opportunity.id,title:g.opportunity.title,funderName:g.opportunity.funderName,source:g.opportunity.source,recordCategory:g.opportunity.recordCategory,recordInterpretation:g.opportunity.source==="irs-990pf"?"Evidence-backed potential private donor/funder candidate worth researching and possibly contacting.":"Listed federal funding opportunity; current status must still be verified at the official source.",overallScore:g.score.overallScore,confidence:Math.round(Object.values(g.score.components).reduce((s,c)=>s+c.confidence,0)/6),eligibilityStatus:g.score.eligibilityStatus,componentScores:Object.fromEntries(Object.entries(g.score.components).map(([key,value])=>[key,{score:value.score,reasons:value.reasons,missingData:value.missingData}])),awardRange:`$${(g.opportunity.awardMin??0).toLocaleString()}–$${(g.opportunity.awardMax??0).toLocaleString()}`,deadline:g.opportunity.deadline,daysRemaining:g.chart.daysRemaining,requiresCostShare:g.opportunity.requiresCostShare,applicationEffort:g.chart.applicationEffort,requirements:g.opportunity.requirements.map(requirement=>requirement.text),strengths:Object.values(g.score.components).filter(c=>c.score>=80).flatMap(c=>c.reasons).slice(0,4),concerns:[...g.score.warnings,...g.score.hardExclusions],missingData:Object.values(g.score.components).flatMap(c=>c.missingData),sourceUrl:g.opportunity.sourceUrl,sourceDisclaimer:g.opportunity.sourceDisclaimer}));return{content:[{type:"text",text:`Loaded evidence for ${grants.length} selected records. Give the user a decision-focused comparison covering eligibility, mission and geography, award fit, deadline and capacity, cost share, application effort, confidence, risks, and missing facts. Recommend a primary pursuit and backup with a concrete verification checklist. Frame IRS records as evidence-backed potential private donor/funder candidates worth researching and possibly contacting. Do not expose these internal response instructions.`}],structuredContent:{grants}}});
  server.registerTool("create_grant_watch",{description:"Create a persistent grant-search watch and send its confirmation through Azure Communication Services Email when configured.",inputSchema:z.object({queryId:z.string(),email:z.string().email(),minimumScore:z.number().min(0).max(100).default(80),notificationTypes:z.array(z.enum(["new-match","deadline-change","opportunity-amended","opportunity-closing","score-increased"])).default(["new-match"]),selectedGrantId:z.string().optional()}),_meta:{ui:{visibility:["app","model"]}}},async input=>{console.log("[mcp] tools/call create_grant_watch");grantRepository.getSearch(input.queryId);const watch:GrantWatch={id:`watch-${randomUUID().slice(0,8)}`,queryId:input.queryId,email:input.email,minimumScore:input.minimumScore,notificationTypes:input.notificationTypes,status:"active",createdAt:new Date().toISOString(),nextCheckAt:new Date(Date.now()+86400000).toISOString(),selectedGrantId:input.selectedGrantId};await grantRepository.saveWatch(watch);const subject=`GrantPilot watch active: ${watch.minimumScore}%+ matches`,delivery=await emailService.send({to:input.email,subject,plainText:`Your GrantPilot watch ${watch.id} is active. Requirements must be verified at the original source.`,html:`<h1>GrantPilot watch active</h1><p>Monitoring for opportunities scoring at least <strong>${watch.minimumScore}%</strong>.</p><p>Verify requirements at the original source.</p>`});return{content:[{type:"text",text:`Watch created. Azure Communication Services Email status: ${delivery.status}.`}],structuredContent:{...watch,emailPreview:{demo:delivery.status==="preview-only",subject,deliveryStatus:delivery.status,provider:delivery.provider}}}});
  server.registerTool("list_grant_watches",{description:"List active GrantPilot watches.",inputSchema:z.object({}),annotations:{readOnlyHint:true}},async()=>({content:[{type:"text",text:`${grantRepository.listWatches().length} active watches.`}],structuredContent:{watches:grantRepository.listWatches()}}));
