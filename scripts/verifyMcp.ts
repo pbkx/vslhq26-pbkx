@@ -3,6 +3,7 @@ import {spawn,type ChildProcess} from "node:child_process";
 import {Client} from "@modelcontextprotocol/sdk/client/index.js";
 import {StreamableHTTPClientTransport} from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import {REQUIRED_TOOLS} from "../src/mcp/createServer.js";
+import {GRANTPILOT_WIDGET_URI} from "../src/mcp/resources/grantPilotWidget.js";
 
 const mcpUrl=process.env.MCP_URL??"http://localhost:3000/mcp";
 const healthUrl=new URL("/health",mcpUrl).toString();
@@ -24,7 +25,7 @@ await client.connect(transport);
 const listed=await client.listTools(),names=listed.tools.map(tool=>tool.name);
 for(const name of REQUIRED_TOOLS)if(!names.includes(name))throw new Error(`Missing tool ${name}`);
 const search=listed.tools.find(tool=>tool.name==="search_grants")!;
-if((search._meta as any)?.ui?.resourceUri!=="ui://grantpilot/opportunity-workbench-v3")
+if((search._meta as any)?.ui?.resourceUri!==GRANTPILOT_WIDGET_URI)
  throw new Error("search_grants has no GrantPilot UI binding");
 
 const prompt="Find grants for a Washington nonprofit teaching practical AI skills to low-income adults. We need between $100,000 and $500,000.";
@@ -63,7 +64,7 @@ const tooMany=await client.callTool({name:"search_grants",arguments:{query:promp
 if(!tooMany.isError||(tooMany.structuredContent as any)?.error?.code!=="RESULT_LIMIT_EXCEEDED")
  throw new Error("search_grants did not return its explicit result-limit error");
 
-const resource=await client.readResource({uri:"ui://grantpilot/opportunity-workbench-v3"}),content=resource.contents[0];
+const resource=await client.readResource({uri:GRANTPILOT_WIDGET_URI}),content=resource.contents[0];
 if(content?.mimeType!=="text/html;profile=mcp-app"||!("text"in content)||!content.text.includes("GrantPilot"))
  throw new Error("GrantPilot widget invalid");
 console.log(

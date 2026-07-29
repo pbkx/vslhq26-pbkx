@@ -124,14 +124,6 @@ export default function App() {
   return (
     <main className="app-shell">
       <ControlBar data={data} view={view} onViewChange={setView} filters={filters} onFiltersChange={setFilters} />
-      <div className="context-bar">
-        <div>
-          <span>Search context</span>
-          <strong>{data.context?.organizationName ?? "Nonprofit applicant"}{data.context?.organizationLocation ? ` · ${data.context.organizationLocation}` : ""}</strong>
-          <p>{data.context?.projectSummary ?? "Ranked using mission, eligibility, geography, award size, history, and deadline evidence."}</p>
-        </div>
-        <div className="context-status"><i />{data.searchedAt ? `Indexed ${new Date(data.searchedAt).toLocaleDateString()}` : "Indexed evidence"}<small>Verify at source</small></div>
-      </div>
       <div className="workspace">
         <Visualization view={view} grants={filtered} selectedId={selected.opportunity.id} onSelect={setSelectedId} context={data.context} />
         <SelectedPanel
