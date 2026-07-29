@@ -16,7 +16,11 @@ export function mountMcpTransport(app:Express){
     try{
       const sid=sessionId(req);let transport=sid?transports.get(sid):undefined;
       if(!transport&&!sid&&isInitializeRequest(req.body)){
-        transport=new StreamableHTTPServerTransport({sessionIdGenerator:()=>randomUUID(),onsessioninitialized:(id)=>{transports.set(id,transport!);console.log(`[mcp] session initialized ${id.slice(0,8)}…`)}});
+        transport=new StreamableHTTPServerTransport({
+          sessionIdGenerator:()=>randomUUID(),
+          enableJsonResponse:true,
+          onsessioninitialized:(id)=>{transports.set(id,transport!);console.log(`[mcp] session initialized ${id.slice(0,8)}…`)}
+        });
         transport.onclose=()=>{if(transport?.sessionId)transports.delete(transport.sessionId)};
         const server=createGrantPilotMcpServer();await server.connect(transport);
       }else if(!transport){rpcError(res,400,-32000,"Unknown, expired, or missing MCP session.");return}
@@ -24,7 +28,14 @@ export function mountMcpTransport(app:Express){
       await transport.handleRequest(req,res,req.body);
     }catch(error){console.error("[mcp] request error",error instanceof Error?error.message:"Unknown error");if(!res.headersSent)rpcError(res,500,-32603,"Internal MCP server error.")}
   });
-  app.get("/mcp",async(req,res)=>{const transport=sessionId(req)?transports.get(sessionId(req)!):undefined;if(!transport){rpcError(res,400,-32000,"Unknown, expired, or missing MCP session.");return}try{await transport.handleRequest(req,res)}catch(error){console.error("[mcp] stream error",error instanceof Error?error.message:error);if(!res.headersSent)rpcError(res,500,-32603,"MCP stream failed.")}});
+  // The standalone SSE stream is optional in Streamable HTTP. Dev Tunnel can
+  // buffer an idle SSE response and prevent clients from continuing to
+  // tools/list, so MCP requests use self-contained JSON POST responses.
+  // Official clients treat 405 here as "standalone SSE not supported".
+  app.get("/mcp",(_req,res)=>{
+    res.setHeader("Allow","POST, DELETE");
+    rpcError(res,405,-32000,"Standalone SSE is not supported; use MCP over POST.");
+  });
   app.delete("/mcp",async(req,res)=>{const sid=sessionId(req);const transport=sid?transports.get(sid):undefined;if(!transport){rpcError(res,400,-32000,"Unknown or expired MCP session.");return}try{await transport.handleRequest(req,res);transports.delete(sid!)}catch(error){console.error("[mcp] session close error",error instanceof Error?error.message:error);if(!res.headersSent)rpcError(res,500,-32603,"Unable to close MCP session.")}});
 }
 

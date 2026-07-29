@@ -1,0 +1,17 @@
+{
+  "$schema":"https://aka.ms/json-schemas/copilot/plugin/v2.4/schema.json",
+  "schema_version":"v2.4",
+  "name_for_human":"GrantPilot",
+  "namespace":"grantpilot",
+  "description_for_human":"Discover current federal opportunities and research historical private-foundation funding prospects.",
+  "description_for_model":"MANDATORY: Call search_grants for every new grant discovery, recommendation, ranking, or comparison request. Recommend and name only records returned by the tool; never add funders or programs from general knowledge. Present Grants.gov opportunities separately from IRS 990-PF historical prospects. IRS 990-PF records are historical private-funder prospects only, and USAspending is historical federal-award context only. Never claim that IRS history is an open application or that eligibility or funding is guaranteed.",
+  "functions":[],
+  "runtimes":[{
+    "type":"RemoteMCPServer",
+    "auth":{"type":"None"},
+    "spec":{
+      "url":"https://rqt1l69t-3000.usw2.devtunnels.ms/mcp"
+    },
+    "run_for_functions":["*"]
+  }]
+}

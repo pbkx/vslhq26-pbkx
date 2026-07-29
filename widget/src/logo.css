@@ -1,0 +1,12 @@
+.mark {
+  background: #000;
+  color: transparent;
+  box-shadow: none;
+}
+
+.mark svg {
+  display: block;
+  width: 24px;
+  height: 24px;
+  fill: #fff;
+}

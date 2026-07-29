@@ -7,19 +7,73 @@ type FederalRow=Record<string,unknown>;
 const jsonList=(value:unknown)=>{try{return JSON.parse(String(value??"[]")) as string[]}catch{return[]}};
 const number=(value:unknown)=>typeof value==="number"?value:value===null||value===undefined?undefined:Number(value);
 const safeTerms=(query?:string)=>[...new Set((query??"").toLowerCase().match(/[a-z0-9][a-z0-9.-]{1,}/g)??[])].slice(0,12);
+const ftsExpression=(terms:string[])=>{
+ const escaped=terms.map(term=>`"${term.replaceAll('"','""')}"*`);
+ return escaped.join(terms.length<=3?" AND ":" OR ");
+};
 const compactText=(value:unknown,maximum=600)=>{const text=String(value??"").replace(/\s+/g," ").trim();return text.length<=maximum?text:`${text.slice(0,maximum-1).trimEnd()}…`};
 const compactList=(values:string[],limit=10,maximum=140)=>[...new Set(values.map(value=>compactText(value,maximum)).filter(Boolean))].slice(0,limit);
+const decodeEntities=(value:unknown)=>String(value??"")
+ .replace(/&#(\d+);/g,(_match,code)=>String.fromCodePoint(Number(code)))
+ .replaceAll("&amp;","&").replaceAll("&quot;",'"').replaceAll("&#39;","'");
+const topicRules:[RegExp,string][]=[
+ [/\b(artificial intelligence|ai|machine learning|responsible ai|ai literacy)\b/i,"artificial intelligence"],
+ [/\b(digital skills?|digital literacy|computer skills?|technology skills?)\b/i,"digital skills"],
+ [/\b(workforce development|workforce training|job training|employment training|career pathways?|upskilling|reskilling)\b/i,"workforce development"],
+ [/\b(adult education|adult learning|continuing education)\b/i,"adult education"],
+ [/\b(digital inclusion|digital equity|digital divide|technology access)\b/i,"digital inclusion"],
+ [/\b(economic mobility|economic opportunity|career advancement|job placement)\b/i,"economic mobility"],
+ [/\b(apprenticeship|credential|certification)\b/i,"career pathways"],
+ [/\b(entrepreneurship|small business)\b/i,"entrepreneurship"],
+ [/\b(science|technology|engineering|mathematics|stem)\b/i,"STEM education"],
+];
+const populationRules:[RegExp,string][]=[
+ [/\b(low-income|low income|economically disadvantaged)\b/i,"low-income people"],
+ [/\b(underserved|underrepresented|disadvantaged)\b/i,"underserved communities"],
+ [/\b(adult learners?|adults?|workers?|job seekers?)\b/i,"adults and workers"],
+ [/\b(unemployed|displaced workers?)\b/i,"unemployed workers"],
+ [/\b(disab(?:led|ilities)|people with disabilities)\b/i,"people with disabilities"],
+ [/\b(women|girls)\b/i,"women and girls"],
+ [/\b(youth|young adults?)\b/i,"youth and young adults"],
+ [/\b(rural|tribal|native american|american indian)\b/i,"rural or Tribal communities"],
+];
+const inferred=(text:string,rules:[RegExp,string][])=>rules.filter(([pattern])=>pattern.test(text)).map(([,label])=>label);
+const eligibilityCodes:Record<string,string>={
+ "00":"State governments","01":"County governments","02":"City or township governments",
+ "04":"Special district governments","05":"Independent school districts",
+ "06":"Public and state-controlled institutions of higher education",
+ "07":"Federally recognized Native American tribal governments",
+ "08":"Public housing authorities or Indian housing authorities",
+ "11":"Native American tribal organizations",
+ "12":"501(c)(3) nonprofits other than institutions of higher education",
+ "13":"Nonprofits without 501(c)(3) status other than institutions of higher education",
+ "20":"Private institutions of higher education","21":"Individuals",
+ "22":"For-profit organizations other than small businesses","23":"Small businesses",
+ "25":"Other applicants; review the additional eligibility text",
+ "99":"Unrestricted, subject to the additional eligibility text",
+};
+const fundingCodes:Record<string,string>={
+ AG:"Agriculture",AR:"Arts",BC:"Business and commerce",CD:"Community development",
+ ED:"Education",ELT:"Employment, labor and training",HL:"Health",HO:"Housing",
+ ISS:"Income security and social services",O:"Other",RD:"Regional development",
+ ST:"Science and technology research",OZ:"Opportunity Zone benefits",
+};
+const expandCodes=(values:string[],codes:Record<string,string>)=>values.map(value=>codes[value]??value);
 
 function mapFederal(row:FederalRow):GrantOpportunity{
  const status=String(row.status) as GrantOpportunity["opportunityStatus"];
-  const requirements=compactList(jsonList(row.requirements_json),4,220).map((text,index)=>({id:`source-${index}`,category:"other" as const,text,required:true,machineEvaluable:false}));
+ const title=decodeEntities(row.title),summary=decodeEntities(row.summary);
+ const searchableText=`${title} ${summary}`;
+ const requirements=compactList(jsonList(row.requirements_json),4,220).map((text,index)=>({id:`source-${index}`,category:"other" as const,text,required:true,machineEvaluable:false}));
  const sourceId=String(row.opportunity_id||row.opportunity_number);
  return{
   id:`grantsgov-${sourceId}`,source:"grants-gov",sourceId,
   recordCategory:status==="forecasted"?"forecasted-federal-opportunity":"current-federal-opportunity",
-  title:String(row.title),funderName:String(row.agency_name),funderType:"federal",
-  summary:compactText(row.summary),missionTopics:compactList(jsonList(row.mission_topics_json),8,100),populationsServed:[],
-  eligibleApplicantTypes:compactList(jsonList(row.eligible_applicants_json),8,140),
+  title,funderName:decodeEntities(row.agency_name),funderType:"federal",
+  summary:compactText(summary),
+  missionTopics:compactList([...inferred(searchableText,topicRules),...expandCodes(jsonList(row.mission_topics_json),fundingCodes)],12,100),
+  populationsServed:compactList(inferred(searchableText,populationRules),8,100),
+  eligibleApplicantTypes:compactList(expandCodes(jsonList(row.eligible_applicants_json),eligibilityCodes),8,180),
   eligibleLocations:[{country:"US",nationwide:true,description:"Review the official eligibility text; federal opportunities may impose geographic restrictions."}],
   awardMin:number(row.award_min),awardMax:number(row.award_max),expectedAwardCount:number(row.expected_award_count),
   requiresCostShare:row.requires_cost_share===null?undefined:Boolean(row.requires_cost_share),
@@ -56,7 +110,7 @@ export class LocalGrantIndex{
       WHERE federal_opportunities_fts MATCH ? AND f.status IN ('open','forecasted')
       ORDER BY bm25(federal_opportunities_fts), COALESCE(f.close_date,'9999-12-31') ASC
       LIMIT ?
-     `).all(terms.map(term=>`"${term.replaceAll('"','""')}"*`).join(" OR "),limit)
+     `).all(ftsExpression(terms),limit)
     :db.prepare(`
       SELECT * FROM federal_opportunities WHERE status IN ('open','forecasted')
       ORDER BY COALESCE(close_date,'9999-12-31') ASC, last_updated DESC LIMIT ?
@@ -72,32 +126,55 @@ export class LocalGrantIndex{
    return row?mapFederal(row):null;
   }finally{db.close()}
  }
- searchPrivateProspects(query:string|undefined,limit:number){
+ searchPrivateProspects(query:string|undefined,limit:number,preferredStates:string[]=[]){
   if(!this.isAvailable())return[];
   const db=this.open();
   try{
    const terms=safeTerms(query);
    if(!terms.length)return[];
+   const normalizedStates=[...new Set(preferredStates.map(state=>state.toUpperCase()))];
+   const stateOrder=normalizedStates.length
+    ?`CASE WHEN UPPER(COALESCE(p.recipient_state,'')) IN (${normalizedStates.map(()=>"?").join(",")}) THEN 0 ELSE 1 END,`
+    :"";
    const rows=db.prepare(`
     SELECT p.* FROM private_funder_prospects_fts
     JOIN private_funder_prospects p ON p.id=private_funder_prospects_fts.rowid
     WHERE private_funder_prospects_fts MATCH ?
+    ORDER BY ${stateOrder} bm25(private_funder_prospects_fts), p.amount DESC
+    LIMIT ?
+   `).all(
+    ftsExpression(terms),
+    ...normalizedStates,Math.max(limit*100,500)
+   ) as any[];
+   const candidateGroups=new Map<string,any[]>();
+   for(const row of rows){const key=String(row.ein||row.foundation_name);const group=candidateGroups.get(key)??[];group.push(row);candidateGroups.set(key,group)}
+   const selectedKeys=[...candidateGroups.keys()].slice(0,limit);
+   const expandedRows=selectedKeys.length?db.prepare(`
+    SELECT p.* FROM private_funder_prospects_fts
+    JOIN private_funder_prospects p ON p.id=private_funder_prospects_fts.rowid
+    WHERE private_funder_prospects_fts MATCH ?
+      AND COALESCE(NULLIF(p.ein,''),p.foundation_name) IN (${selectedKeys.map(()=>"?").join(",")})
     ORDER BY bm25(private_funder_prospects_fts), p.amount DESC
     LIMIT ?
-   `).all(terms.map(term=>`"${term.replaceAll('"','""')}"*`).join(" OR "),Math.max(limit*30,100)) as any[];
-   const groups=new Map<string,any[]>();
-   for(const row of rows){const key=String(row.ein||row.foundation_name);const group=groups.get(key)??[];group.push(row);groups.set(key,group)}
-   return[...groups.entries()].slice(0,limit).map(([key,grants]):GrantOpportunity=>{
-    const first=grants[0],purposes=[...new Set(grants.map(item=>String(item.purpose)).filter(Boolean))].slice(0,5);
-    const topicList=[...new Set(grants.flatMap(item=>jsonList(item.mission_topics_json)))].slice(0,12);
+   `).all(ftsExpression(terms),...selectedKeys,Math.max(limit*250,2_500)) as any[]:[];
+   const groups=new Map<string,any[]>(selectedKeys.map(key=>[key,[]]));
+   for(const row of expandedRows){const key=String(row.ein||row.foundation_name);groups.get(key)?.push(row)}
+   return selectedKeys.map((key):[string,any[]]=>[key,groups.get(key)?.length?groups.get(key)!:candidateGroups.get(key)!]).map(([key,grants]):GrantOpportunity=>{
+    const first=grants[0],purposes=[...new Set(grants.map(item=>decodeEntities(item.purpose)).filter(Boolean))].slice(0,5);
+    const searchableText=purposes.join(" ");
+    const topicList=[...new Set([
+     ...inferred(searchableText,topicRules),
+     ...grants.flatMap(item=>jsonList(item.mission_topics_json)),
+    ])].slice(0,12);
+    const populations=compactList(inferred(searchableText,populationRules),8,100);
     const amounts=grants.map(item=>number(item.amount)).filter((value):value is number=>value!==undefined);
     const states=[...new Set(grants.map(item=>String(item.recipient_state??"")).filter(Boolean))];
     return{
      id:`irs990pf-${key}`,source:"irs-990pf",sourceId:key,recordCategory:"private-funder-prospect",
-     title:`${String(first.foundation_name)} — historical giving pattern`,funderName:String(first.foundation_name),funderType:"foundation",
+     title:`${decodeEntities(first.foundation_name)} — historical giving pattern`,funderName:decodeEntities(first.foundation_name),funderType:"foundation",
      summary:`IRS 990-PF filings show historical grants including ${purposes.join("; ")||"purposes requiring review"}. This is a prospect signal, not a current application opportunity.`,
      description:`Matched ${grants.length} historical grant records in the local IRS index.`,missionTopics:topicList,
-     populationsServed:[],eligibleApplicantTypes:[],
+     populationsServed:populations,eligibleApplicantTypes:[],
      eligibleLocations:[{country:"US",states,description:"Historical recipient locations; not a current geographic eligibility rule."}],
      awardMin:amounts.length?Math.min(...amounts):undefined,awardMax:amounts.length?Math.max(...amounts):undefined,
      opportunityStatus:"unknown",lastVerifiedAt:String(first.indexed_at),

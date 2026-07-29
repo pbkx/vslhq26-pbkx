@@ -3,7 +3,13 @@ import type {GrantOpportunity,GrantSource,HistoricalEvidence,OrganizationProfile
 import {localGrantIndex} from "../repositories/localGrantIndex.js";
 import {grantCache} from "../services/persistentCache.js";
 
-export type OpportunitySearchQuery={query?:string;sources?:GrantSource[];limit:number};
+export type OpportunitySearchQuery={
+ query?:string;
+ searchQueries?:string[];
+ preferredStates?:string[];
+ sources?:GrantSource[];
+ limit:number;
+};
 export interface OpportunityProvider{
  source:GrantSource;
  search(query:OpportunitySearchQuery):Promise<GrantOpportunity[]>;
@@ -38,7 +44,12 @@ export class GrantsGovProvider implements OpportunityProvider{
  source="grants-gov" as const;
  private fallback=new MockOpportunityProvider(this.source);
  async search(query:OpportunitySearchQuery){
-  const indexed=localGrantIndex.searchFederal(query.query,query.limit);
+  const queries=query.searchQueries?.length?query.searchQueries:[query.query].filter((value):value is string=>Boolean(value));
+  const perQuery=Math.max(20,Math.ceil(query.limit/Math.max(queries.length,1)));
+  const indexed=[...new Map(
+   queries.flatMap(value=>localGrantIndex.searchFederal(value,perQuery))
+    .map(item=>[item.id,item] as const)
+  ).values()].slice(0,query.limit);
   return indexed.length?indexed:this.fallback.search(query);
  }
  async getById(id:string){return localGrantIndex.getFederal(id)??this.fallback.getById(id)}
@@ -78,7 +89,12 @@ export class Irs990PfProspectProvider implements OpportunityProvider{
   // The explicit IRS importer will populate the local prospect table after the
   // IRS index CSV is staged. Until then, clearly labeled demo prospects may be
   // enabled for hackathon continuity.
-  const indexed=localGrantIndex.searchPrivateProspects(query.query,query.limit);
+  const queries=query.searchQueries?.length?query.searchQueries:[query.query].filter((value):value is string=>Boolean(value));
+  const perQuery=Math.max(20,Math.ceil(query.limit/Math.max(queries.length,1)));
+  const indexed=[...new Map(
+   queries.flatMap(value=>localGrantIndex.searchPrivateProspects(value,perQuery,query.preferredStates))
+    .map(item=>[item.id,item] as const)
+  ).values()].slice(0,query.limit);
   if(indexed.length)return indexed;
   if(process.env.DEMO_IRS_PROSPECTS==="false")return[];
   return this.fallback.search(query);
