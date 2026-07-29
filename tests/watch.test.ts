@@ -65,7 +65,10 @@ describe("grant watch preferences and email copy", () => {
     expect(confirmation.html).not.toContain("60%+");
     expect(confirmation.html).toContain("Open in Copilot");
     expect(confirmation.html).toContain("conversationId=watch-test");
-    expect(confirmation.html).toContain("background:#0d0d0c");
+    expect(confirmation.html).toContain("background:#10100f");
+    expect(confirmation.html).toContain("background:#181817");
+    expect(confirmation.html).toContain("border:1px solid #30302e");
+    expect(confirmation.html).not.toContain("background:#ecece7");
 
     const alert = buildWatchAlertEmail(watch, grant, {
       notificationType: "new-match",

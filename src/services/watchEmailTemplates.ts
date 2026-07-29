@@ -72,8 +72,8 @@ const formatDeadline = (deadline?: string) => {
 
 const factRow = (label: string, value: string) => `
   <tr>
-    <td class="fact-label" style="padding:12px 0;border-top:1px solid #30302d;color:#a8a8a1;font-size:13px">${escapeHtml(label)}</td>
-    <td class="fact-value" style="padding:12px 0;border-top:1px solid #30302d;color:#f5f5f1;font-size:13px;font-weight:700;text-align:right">${escapeHtml(value)}</td>
+    <td class="fact-label" style="padding:11px 0;border-top:1px solid #30302e;color:#aaa9a3;font-size:12px;line-height:17px">${escapeHtml(label)}</td>
+    <td class="fact-value" style="padding:11px 0;border-top:1px solid #30302e;color:#f2f2ef;font-size:12px;font-weight:700;line-height:17px;text-align:right">${escapeHtml(value)}</td>
   </tr>`;
 
 const emailShell = ({
@@ -95,52 +95,67 @@ const emailShell = ({
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <meta name="supported-color-schemes" content="dark">
   <title>${escapeHtml(title)}</title>
   <style>
-    body{margin:0!important;background:#ecece7;color:#171715;font-family:Inter,Segoe UI,Arial,sans-serif}
+    :root{color-scheme:dark;supported-color-schemes:dark}
+    body{margin:0!important;background:#10100f;color:#f2f2ef;font-family:Inter,-apple-system,BlinkMacSystemFont,Segoe UI,Arial,sans-serif}
     table{border-collapse:collapse}
     a{text-decoration:none}
-    .email-wrap{width:100%;background:#ecece7}
+    .email-wrap{width:100%;background:#10100f}
     .email-card{width:100%;max-width:640px}
-    .content-card{border-radius:18px}
-    .button{display:inline-block;border-radius:10px;padding:13px 18px;font-size:14px;font-weight:700;line-height:18px}
+    .surface{border-radius:14px}
+    .button{display:block;border-radius:9px;padding:13px 18px;font-size:13px;font-weight:700;line-height:18px;text-align:center}
     @media(max-width:600px){
-      .outer-pad{padding:14px 10px!important}
+      .outer-pad{padding:20px 10px!important}
       .hero-pad,.content-pad{padding:22px 18px!important}
-      .button{display:block!important;margin:8px 0 0!important;text-align:center!important}
-      .button-cell{display:block!important;width:100%!important}
+      .button-cell{display:block!important;width:100%!important;padding:5px 0!important}
       .fact-label,.fact-value{font-size:12px!important}
     }
   </style>
 </head>
-<body>
+<body style="margin:0!important;background:#10100f;color:#f2f2ef">
   <div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent">${escapeHtml(preheader)}</div>
-  <table role="presentation" class="email-wrap" width="100%" cellpadding="0" cellspacing="0">
+  <table role="presentation" class="email-wrap" width="100%" cellpadding="0" cellspacing="0" bgcolor="#10100f" style="width:100%;background:#10100f">
     <tr>
-      <td class="outer-pad" align="center" style="padding:30px 16px">
+      <td class="outer-pad" align="center" style="padding:34px 16px 30px">
         <table role="presentation" class="email-card" width="640" cellpadding="0" cellspacing="0">
           <tr>
-            <td class="hero-pad" style="background:#0d0d0c;border-radius:18px 18px 0 0;padding:24px 28px;border-bottom:3px solid ${accent}">
-              <table role="presentation" width="100%">
+            <td style="padding:0 2px 18px">
+              <table role="presentation" cellpadding="0" cellspacing="0">
                 <tr>
-                  <td width="42" valign="middle">
-                    <div style="width:36px;height:36px;border-radius:9px;background:#000;color:#fff;font-size:23px;line-height:36px;text-align:center">✦</div>
+                  <td width="44" valign="middle">
+                    <div style="width:36px;height:36px;border-radius:10px;background:#000;color:#fff;font-size:22px;line-height:36px;text-align:center">✦</div>
                   </td>
-                  <td valign="middle" style="color:#f5f5f1;font-size:18px;font-weight:750">GrantPilot</td>
+                  <td valign="middle" style="color:#f2f2ef;font-size:20px;font-weight:750;letter-spacing:-.02em">GrantPilot</td>
                 </tr>
               </table>
-              <div style="margin-top:24px;color:${accent};font-size:11px;font-weight:800;letter-spacing:.12em;text-transform:uppercase">${escapeHtml(eyebrow)}</div>
-              <h1 style="margin:8px 0 7px;color:#f5f5f1;font-size:28px;line-height:1.18;letter-spacing:-.02em">${escapeHtml(title)}</h1>
-              <p style="margin:0;color:#a8a8a1;font-size:15px;line-height:1.5">${escapeHtml(subtitle)}</p>
             </td>
           </tr>
           <tr>
-            <td class="content-pad content-card" style="background:#171715;border:1px solid #30302d;border-top:0;border-radius:0 0 18px 18px;padding:26px 28px;color:#f5f5f1">
-              ${content}
+            <td class="surface" bgcolor="#181817" style="overflow:hidden;background:#181817;border:1px solid #30302e;border-radius:14px;color:#f2f2ef">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td class="hero-pad" style="padding:27px 28px 24px">
+                    <span style="display:inline-block;padding:5px 8px;border:1px solid #30302e;border-radius:999px;background:#222220;color:${accent};font-size:10px;font-weight:800;line-height:12px;letter-spacing:.09em;text-transform:uppercase">${escapeHtml(eyebrow)}</span>
+                    <h1 style="margin:14px 0 7px;color:#f2f2ef;font-size:22px;line-height:1.18;letter-spacing:-.025em">${escapeHtml(title)}</h1>
+                    <p style="margin:0;color:#aaa9a3;font-size:14px;line-height:1.5">${escapeHtml(subtitle)}</p>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="height:1px;background:#30302e;font-size:0;line-height:0">&nbsp;</td>
+                </tr>
+                <tr>
+                  <td class="content-pad" style="padding:24px 28px 27px;color:#f2f2ef">
+                    ${content}
+                  </td>
+                </tr>
+              </table>
             </td>
           </tr>
           <tr>
-            <td style="padding:15px 6px 0;color:#70706b;font-size:11px;line-height:1.5">
+            <td style="padding:14px 4px 0;color:#7b7a75;font-size:10px;line-height:1.5">
               GrantPilot ranks evidence to support funding decisions. Confirm eligibility, deadlines, and application requirements at the original source.
             </td>
           </tr>
@@ -152,7 +167,7 @@ const emailShell = ({
 </html>`;
 
 const copilotButton = (url: string) => `
-  <a class="button" href="${escapeHtml(url)}" style="display:inline-block;border:1px solid #f5f5f1;background:#f5f5f1;color:#11110f;border-radius:10px;padding:13px 18px;font-size:14px;font-weight:700;line-height:18px">
+  <a class="button" href="${escapeHtml(url)}" style="display:block;border:1px solid #f2f2ef;background:#f2f2ef;color:#111;border-radius:9px;padding:13px 18px;font-size:13px;font-weight:700;line-height:18px;text-align:center">
     Open in Copilot&nbsp; →
   </a>`;
 
@@ -185,10 +200,10 @@ export function buildWatchConfirmationEmail(
     "GrantPilot ranks evidence to support decisions. Verify eligibility and deadlines at the original source.",
   ].filter(Boolean).join("\n");
   const alertItems = alerts
-    .map((label) => `<span style="display:inline-block;margin:0 6px 7px 0;padding:6px 9px;border:1px solid #3b3b37;border-radius:999px;color:#d7d7d1;font-size:12px">${escapeHtml(label)}</span>`)
+    .map((label) => `<span style="display:inline-block;margin:0 6px 7px 0;padding:6px 9px;border:1px solid #30302e;border-radius:999px;background:#222220;color:#aaa9a3;font-size:11px">${escapeHtml(label)}</span>`)
     .join("");
   const content = `
-    <p style="margin:0 0 18px;color:#d7d7d1;font-size:14px;line-height:1.6">GrantPilot will monitor the saved criteria and send focused updates when something changes.</p>
+    <p style="margin:0 0 18px;color:#f2f2ef;font-size:13px;line-height:1.6">GrantPilot will monitor the saved criteria and send focused updates when something changes.</p>
     <table role="presentation" width="100%">
       ${factRow("Watch", scope)}
       ${factRow("Match threshold", quality.label)}
@@ -196,10 +211,10 @@ export function buildWatchConfirmationEmail(
       ${watch.notificationTypes.includes("opportunity-closing") ? factRow("Deadline reminder", `${watch.deadlineLeadDays} days before`) : ""}
     </table>
     <div style="margin-top:20px">
-      <div style="margin-bottom:9px;color:#8e8e88;font-size:11px;font-weight:800;letter-spacing:.1em;text-transform:uppercase">Notifications</div>
+      <div style="margin-bottom:9px;color:#7b7a75;font-size:9px;font-weight:800;letter-spacing:.09em;text-transform:uppercase">Notifications</div>
       ${alertItems}
     </div>
-    <div style="margin-top:21px">${copilotButton(copilotUrl)}</div>`;
+    <div style="margin-top:18px">${copilotButton(copilotUrl)}</div>`;
   const html = emailShell({
     preheader: `${frequency.label} GrantPilot alerts are now active.`,
     eyebrow: "Watch created",
@@ -284,6 +299,23 @@ export function buildWatchAlertEmail(
   const historical = grant.opportunity.source === "irs-990pf";
   const sourceLabel = historical ? "IRS 990-PF evidence" : "Grants.gov";
   const sourceAction = historical ? "View IRS evidence" : "View official source";
+  const eligibility = grant.score.eligibilityStatus ?? "needs-verification";
+  const eligibilityPositive = eligibility === "confirmed" || eligibility === "likely";
+  const eligibilityText = eligibility === "confirmed"
+    ? "Eligible"
+    : eligibility === "likely"
+      ? "Likely eligible"
+      : eligibility === "likely-ineligible"
+        ? "Likely ineligible"
+        : "Verify eligibility";
+  const overallScore = Math.round(grant.score.overallScore ?? 0);
+  const applicationEffort = Math.round(grant.chart?.applicationEffort ?? 0);
+  const description = grant.opportunity.summary
+    ?? "Review the indexed source record for the complete program description.";
+  const evidenceNote = historical
+    ? "Evidence-backed potential private donor/funder candidate worth researching and possibly contacting."
+    : grant.opportunity.sourceDisclaimer
+      ?? "Verify eligibility, deadline, and submission requirements in the official notice.";
   const plainText = [
     presentation.headline,
     grant.opportunity.title,
@@ -300,37 +332,72 @@ export function buildWatchAlertEmail(
     `${sourceAction}: ${grant.opportunity.sourceUrl}`,
   ].join("\n");
   const content = `
-    <p style="margin:0 0 18px;color:#d7d7d1;font-size:14px;line-height:1.6">${escapeHtml(presentation.intro)}</p>
-    <div style="padding:16px;border:1px solid #30302d;border-radius:12px;background:#11110f">
-      <div style="color:#8e8e88;font-size:11px;font-weight:800;letter-spacing:.1em;text-transform:uppercase">Opportunity</div>
-      <h2 style="margin:7px 0 5px;color:#f5f5f1;font-size:20px;line-height:1.28">${escapeHtml(grant.opportunity.title)}</h2>
-      <p style="margin:0;color:#a8a8a1;font-size:13px">${escapeHtml(grant.opportunity.funderName)}</p>
-    </div>
-    <table role="presentation" width="100%" style="margin-top:12px">
-      ${factRow("Match level", quality.label)}
-      ${factRow("Source", sourceLabel)}
-      ${factRow("Award", awardRange(grant))}
-      ${factRow("Deadline", deadline)}
-    </table>
-    <div style="margin-top:20px;padding:15px 16px;border-left:3px solid ${presentation.accent};background:#20201d;border-radius:4px 10px 10px 4px">
-      <div style="color:#8e8e88;font-size:11px;font-weight:800;letter-spacing:.1em;text-transform:uppercase">Why it surfaced</div>
-      <p style="margin:7px 0 0;color:#e5e5df;font-size:13px;line-height:1.55">${escapeHtml(missionReason)}</p>
-    </div>
-    <table role="presentation" width="100%" style="margin-top:22px">
+    <p style="margin:0 0 18px;color:#aaa9a3;font-size:12px;line-height:1.55">${escapeHtml(presentation.intro)}</p>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
       <tr>
-        <td class="button-cell" style="padding-right:7px">${copilotButton(copilotUrl)}</td>
-        <td class="button-cell" style="padding-left:7px">
-          <a class="button" href="${escapeHtml(grant.opportunity.sourceUrl)}" style="display:inline-block;border:1px solid #4a4a45;background:transparent;color:#f5f5f1;border-radius:10px;padding:13px 18px;font-size:14px;font-weight:700;line-height:18px">${sourceAction}</a>
+        <td valign="top">
+          <span style="display:inline-block;margin:0 5px 5px 0;padding:5px 8px;border-radius:999px;background:${historical ? "#2b241d" : "#2b2b28"};color:${historical ? "#d99145" : "#f2f2ef"};font-size:9px;font-weight:700;line-height:11px">${escapeHtml(sourceLabel)}</span>
+          <span style="display:inline-block;margin:0 0 5px;padding:5px 8px;border:1px ${eligibilityPositive ? "solid #315f4c" : "dashed #6f4e2f"};border-radius:999px;background:${eligibilityPositive ? "#1b2923" : "#211d19"};color:${eligibilityPositive ? "#55b88a" : "#d99145"};font-size:9px;font-weight:700;line-height:11px">${escapeHtml(eligibilityText)}</span>
+        </td>
+        <td width="58" valign="top" align="right">
+          <div style="color:#f2f2ef;font-size:19px;font-weight:750;line-height:20px">${overallScore}</div>
+          <div style="margin-top:2px;color:#7b7a75;font-size:8px;font-weight:700;letter-spacing:.06em;text-transform:uppercase">match</div>
+        </td>
+      </tr>
+    </table>
+    <h2 style="margin:8px 0 5px;color:#f2f2ef;font-size:20px;line-height:1.25;letter-spacing:-.02em">${escapeHtml(grant.opportunity.title)}</h2>
+    <p style="margin:0;color:#aaa9a3;font-size:11px;line-height:1.4">${escapeHtml(grant.opportunity.funderName)}</p>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:19px;border:1px solid #30302e;border-radius:9px;background:#10100f">
+      <tr>
+        <td width="50%" valign="top" style="padding:12px 14px;border-right:1px solid #30302e;border-bottom:1px solid #30302e">
+          <div style="color:#7b7a75;font-size:8px;line-height:11px">Award range</div>
+          <div style="margin-top:4px;color:#f2f2ef;font-size:11px;font-weight:700;line-height:15px">${escapeHtml(awardRange(grant))}</div>
+        </td>
+        <td width="50%" valign="top" style="padding:12px 14px;border-bottom:1px solid #30302e">
+          <div style="color:#7b7a75;font-size:8px;line-height:11px">${historical ? "Status" : "Deadline"}</div>
+          <div style="margin-top:4px;color:#f2f2ef;font-size:11px;font-weight:700;line-height:15px">${escapeHtml(deadline)}</div>
+        </td>
+      </tr>
+      <tr>
+        <td width="50%" valign="top" style="padding:12px 14px;border-right:1px solid #30302e">
+          <div style="color:#7b7a75;font-size:8px;line-height:11px">Watch threshold</div>
+          <div style="margin-top:4px;color:#f2f2ef;font-size:11px;font-weight:700;line-height:15px">${escapeHtml(quality.label)}</div>
+        </td>
+        <td width="50%" valign="top" style="padding:12px 14px">
+          <div style="color:#7b7a75;font-size:8px;line-height:11px">Pursuit effort</div>
+          <div style="margin-top:4px;color:#f2f2ef;font-size:11px;font-weight:700;line-height:15px">${applicationEffort}/100</div>
         </td>
       </tr>
     </table>`;
+  const evidence = `
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:18px;border-top:1px solid #30302e">
+      <tr>
+        <td class="button-cell" width="50%" valign="top" style="padding:16px 10px 0 0">
+          <div style="color:#aaa9a3;font-size:9px;font-weight:700;letter-spacing:.055em;text-transform:uppercase">Description</div>
+          <p style="margin:6px 0 0;color:#f2f2ef;font-size:11px;line-height:1.55">${escapeHtml(description)}</p>
+        </td>
+        <td class="button-cell" width="50%" valign="top" style="padding:16px 0 0 10px">
+          <div style="color:#aaa9a3;font-size:9px;font-weight:700;letter-spacing:.055em;text-transform:uppercase">Why it matches</div>
+          <p style="margin:6px 0 0;color:#f2f2ef;font-size:11px;line-height:1.55">${escapeHtml(missionReason)}</p>
+        </td>
+      </tr>
+    </table>
+    <div style="margin-top:18px;padding:11px 12px;border:1px solid #30302e;background:#222220;border-radius:10px">
+      <div style="color:#aaa9a3;font-size:9px;font-weight:800;letter-spacing:.055em;text-transform:uppercase">ⓘ&nbsp; Info</div>
+      <p style="margin:6px 0 0;color:#aaa9a3;font-size:10px;font-weight:600;line-height:1.45">${escapeHtml(evidenceNote)}</p>
+    </div>
+    <div style="height:1px;margin-top:18px;background:#30302e;font-size:0;line-height:0">&nbsp;</div>
+    <div style="margin-top:16px">${copilotButton(copilotUrl)}</div>
+    <div style="margin-top:8px">
+      <a class="button" href="${escapeHtml(grant.opportunity.sourceUrl)}" style="display:block;border:1px solid #454540;background:#181817;color:#f2f2ef;border-radius:9px;padding:12px 18px;font-size:12px;font-weight:700;line-height:18px;text-align:center">${sourceAction}</a>
+    </div>`;
   const html = emailShell({
     preheader: `${presentation.eyebrow}: ${grant.opportunity.title}`,
     eyebrow: presentation.eyebrow,
     title: presentation.headline,
     subtitle: grant.opportunity.funderName,
     accent: presentation.accent,
-    content,
+    content: `${content}${evidence}`,
   });
   return { subject: presentation.subject, plainText, html };
 }
