@@ -36,6 +36,9 @@ export const WATCH_NOTIFICATION_LABELS = {
   "deadline-change": "Deadline changes",
   "opportunity-amended": "Official record updates",
   "opportunity-closing": "Approaching deadlines",
+  "opportunity-closed": "Opportunity closed or archived",
+  "opportunity-removed": "Opportunity removed from its source",
+  "no-longer-matching": "No longer matches the saved criteria",
   "score-increased": "A candidate becomes a stronger fit",
 } as const satisfies Record<GrantWatchNotificationType, string>;
 

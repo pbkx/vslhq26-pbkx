@@ -6,6 +6,7 @@ import type {
 import {DEFAULT_WEIGHTS} from "../domain/types.js";
 import {
  CompositeHistoricalProvider,GrantsGovProvider,Irs990PfProspectProvider,
+ OpportunityNotFoundError,
 } from "../providers/providers.js";
 import {grantRepository} from "../repositories/grantRepository.js";
 import {localGrantIndex} from "../repositories/localGrantIndex.js";
@@ -350,8 +351,16 @@ export async function searchGrants(input:SearchInput):Promise<SearchOutput>{
  return output;
 }
 
+export function watchRefreshFilters(search:SearchOutput){
+ const criteria=search.searchCriteria;
+ const filters=criteria?.filters?{...criteria.filters}:undefined;
+ if(filters)delete filters.minimumScore;
+ return filters;
+}
+
 export async function refreshSavedSearch(search:SearchOutput){
  const criteria=search.searchCriteria;
+ const filters=watchRefreshFilters(search);
  return searchGrants({
   queryId:search.queryId,
   query:criteria?.query,
@@ -359,7 +368,10 @@ export async function refreshSavedSearch(search:SearchOutput){
   project:search.project,
   sources:criteria?.sources??(["grants-gov","irs-990pf"] as GrantSource[]),
   resultTypes:criteria?.resultTypes,
-  filters:criteria?.filters,
+  // Alert sensitivity belongs to the watch, not the original dashboard
+  // search. Retaining the original minimum would permanently hide candidates
+  // below that old threshold before the watch could evaluate them.
+  filters,
   weights:search.weights,
   limit:criteria?.limit??Math.min(MAX_SEARCH_RESULTS,Math.max(80,search.resultCount)),
   // Bypass the normalized query cache, re-read the current local indexes,
@@ -368,6 +380,53 @@ export async function refreshSavedSearch(search:SearchOutput){
   refreshData:true,
   backgroundRefresh:true,
  });
+}
+
+export type SelectedGrantRefreshResult =
+ | {status:"found";grant:GrantResult}
+ | {status:"removed";previousGrant:GrantResult}
+ | {status:"unavailable";previousGrant:GrantResult;error:string};
+
+export async function refreshSelectedGrant(
+ search:SearchOutput,
+ grantId:string,
+):Promise<SelectedGrantRefreshResult>{
+ const previousGrant=search.grants.find(grant=>grant.opportunity.id===grantId)
+  ??grantRepository.getGrant(grantId);
+ const provider=providers.find(item=>item.source===previousGrant.opportunity.source);
+ if(!provider)return{
+  status:"unavailable",
+  previousGrant,
+  error:`No provider is registered for ${previousGrant.opportunity.source}.`,
+ };
+ try{
+  let opportunity=await provider.getById(previousGrant.opportunity.sourceId);
+  if(previousGrant.opportunity.source==="grants-gov"){
+   // The saved normalized record is sufficient to call fetchOpportunity even
+   // when the local index no longer contains it.
+   opportunity=opportunity??previousGrant.opportunity;
+   opportunity=await grantsGovProvider.verifySelected(opportunity,true);
+  }else if(!opportunity){
+   return{status:"removed",previousGrant};
+  }
+  if(!opportunity)return{status:"removed",previousGrant};
+  const grant=scoreGrant(
+   opportunity,
+   search.organization,
+   search.project,
+   await history.getHistoricalEvidence(opportunity,search.organization,search.project),
+   search.weights,
+  );
+  return{status:"found",grant};
+ }catch(error){
+  if(error instanceof OpportunityNotFoundError)
+   return{status:"removed",previousGrant};
+  return{
+   status:"unavailable",
+   previousGrant,
+   error:error instanceof Error?error.message:"Unknown provider failure",
+  };
+ }
 }
 
 export function rescoreGrants(queryId:string,grantIds:string[],weights:MatchWeights){

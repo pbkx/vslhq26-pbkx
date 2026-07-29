@@ -135,6 +135,11 @@ GRANTS_GOV_XML_PATH=data/raw/grants-gov/GrantsDBExtract20260728v2.xml
 IRS_INDEX_CSV_PATH=data/raw/irs-teos/2026/index_2026.csv
 IRS_XML_ROOT=data/raw/irs-teos/2026
 IRS_INGEST_CONCURRENCY=16
+IRS_AUTO_REFRESH_ENABLED=true
+IRS_REFRESH_ON_STARTUP=true
+IRS_REFRESH_INTERVAL_MS=604800000
+IRS_INDEX_DOWNLOAD_URL=
+IRS_XML_DOWNLOAD_URLS=
 
 GRANTS_GOV_API_KEY=
 GRANTS_GOV_API_BASE_URL=https://api.grants.gov
@@ -163,13 +168,30 @@ conversation URL, GrantPilot preserves it with the watch; otherwise
 suppresses duplicate notifications for the same unchanged event. Each due
 check reruns the saved criteria against the current normalized local indexes,
 uses the public Grants.gov `search2` API for newly discoverable federal
-records, verifies selected federal details with `fetchOpportunity`, rescoring
-the refreshed records while preserving the original `queryId`. Daily and
+records, and rescoring the refreshed records while preserving the original
+`queryId`. A selected-grant watch bypasses those bounded discovery results and
+fetches its exact Grants.gov source ID through `fetchOpportunity`. It can
+therefore alert when that record closes, is archived, is removed, or changes;
+broad-search watches also report candidates that stop matching the saved
+criteria. Watch sensitivity replaces—not compounds—the minimum score from the
+original search. Daily and
 weekly watches combine all detected changes into one digest; **As detected**
 sends individual alerts. Preview-only or failed deliveries are not marked as
 notified, so they remain eligible for delivery after email credentials recover.
+Watch creation first persists a pending record. It becomes active only when
+the confirmation send succeeds or returns the explicit local `preview-only`
+status; a provider failure leaves a visible, inactive `confirmation-failed`
+record, and retries reuse it instead of creating duplicates.
 While the server is running, a lightweight background poll checks which
-watches are due; each watch still honors its own cadence.
+watches are due; each watch still honors its own cadence. Timer and admin runs
+share an atomic filesystem lease, so processes using the same state volume
+cannot send the same event concurrently. `/admin/run-watches` is disabled
+unless `ADMIN_WATCH_TOKEN` is configured.
+
+Watch management is owner-scoped. With OAuth, GrantPilot derives ownership
+from validated tenant/user claims. In this no-auth hackathon package it falls
+back to the MCP session ID: one Copilot session cannot list or delete another
+session's watches, and list results mask the stored email address.
 
 ## Demo (required)
 
@@ -229,6 +251,7 @@ The importers use streaming parsers and bounded concurrency:
 ```bash
 npm run data:ingest:grants
 npm run data:ingest:irs
+npm run data:refresh:irs
 npm run data:status
 ```
 
@@ -245,6 +268,16 @@ Interactive chat requests never scan raw XML. They query the complete SQLite ful
 npm run data:ingest:grants -- --force
 npm run data:ingest:irs -- --force
 ```
+
+For an automated private-funder refresh, set
+`IRS_AUTO_REFRESH_ENABLED=true`, supply the current official index CSV URL in
+`IRS_INDEX_DOWNLOAD_URL`, and provide comma-separated official XML ZIP URLs in
+`IRS_XML_DOWNLOAD_URLS`. The server periodically runs
+`npm run data:refresh:irs`: HTTP ETag/Last-Modified headers avoid unchanged
+downloads, only changed ZIPs are extracted, and the existing source
+fingerprint prevents an unchanged 990-PF corpus from being reprocessed. Keep
+automatic refresh disabled when an external scheduler or data pipeline already
+stages these files.
 
 The hybrid API strategy preserves freshness without slow broad calls:
 
@@ -271,6 +304,8 @@ Source roles are enforced:
 - Raw datasets and generated indexes must be recreated after cloning because they cannot reasonably be stored in Git.
 - The Microsoft Dev Tunnel URL works only while the local server and tunnel host are running.
 - Azure Communication Services Email remains preview-only until credentials and a verified sender are supplied.
+- Session ownership is the strongest identity available in the no-auth demo. Configure MCP OAuth to manage the same watches across separate Copilot conversations.
+- The filesystem watch-run lease coordinates processes that share one state volume. A horizontally scaled deployment with separate filesystems should replace it with a database/distributed lease.
 - The demo video has not yet been recorded.
 - GrantPilot does not submit applications, guarantee eligibility, or guarantee funding.
 

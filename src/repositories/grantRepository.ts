@@ -1,13 +1,18 @@
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { mkdir, open, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
+import { randomUUID } from "node:crypto";
 import type { GrantResult, GrantWatch, SearchOutput } from "../domain/types.js";
 
-class GrantRepository {
+export class GrantRepository {
   private searches = new Map<string, SearchOutput>();
   private grants = new Map<string, GrantResult>();
   private watches = new Map<string, GrantWatch>();
-  private path = resolve(process.env.GRANTPILOT_STORE_PATH ?? "cache/grants/state.json");
+  private path: string;
   private persistQueue: Promise<void> = Promise.resolve();
+
+  constructor(path = resolve(process.env.GRANTPILOT_STORE_PATH ?? "cache/grants/state.json")) {
+    this.path = path;
+  }
 
   async hydrate() {
     try {
@@ -55,10 +60,85 @@ class GrantRepository {
     return [...this.watches.values()];
   }
 
-  async deleteWatch(id: string) {
+  listWatchesForOwner(ownerKey: string) {
+    return this.listWatches().filter((watch) => watch.ownerKey === ownerKey);
+  }
+
+  getWatchForOwner(id: string, ownerKey: string) {
+    const watch = this.watches.get(id);
+    return watch?.ownerKey === ownerKey ? watch : undefined;
+  }
+
+  findEquivalentWatch(ownerKey: string, candidate: Pick<GrantWatch, "queryId" | "email" | "scope" | "selectedGrantId">) {
+    return this.listWatchesForOwner(ownerKey).find((watch) =>
+      watch.queryId === candidate.queryId
+      && watch.email.toLowerCase() === candidate.email.toLowerCase()
+      && watch.scope === candidate.scope
+      && watch.selectedGrantId === candidate.selectedGrantId
+      && watch.status !== "paused"
+    );
+  }
+
+  async deleteWatch(id: string, ownerKey?: string) {
+    if (ownerKey && this.watches.get(id)?.ownerKey !== ownerKey) return false;
     const removed = this.watches.delete(id);
     await this.enqueuePersist();
     return removed;
+  }
+
+  private watchLeasePath() {
+    return `${this.path}.watch-run.lock`;
+  }
+
+  async acquireWatchRunLease(owner: string, ttlMs = 10 * 60_000) {
+    const path = this.watchLeasePath();
+    await mkdir(resolve(path, ".."), { recursive: true });
+    const payload = JSON.stringify({ owner, expiresAt: Date.now() + ttlMs });
+    const create = async () => {
+      const handle = await open(path, "wx");
+      try {
+        await handle.writeFile(payload);
+      } finally {
+        await handle.close();
+      }
+    };
+    try {
+      await create();
+      return true;
+    } catch (error: any) {
+      if (error?.code !== "EEXIST") throw error;
+    }
+    try {
+      const existing = JSON.parse(await readFile(path, "utf8"));
+      if (Number(existing.expiresAt) > Date.now()) return false;
+    } catch {
+      // Invalid or partially written leases are treated as stale.
+    }
+    const stale = `${path}.stale-${process.pid}-${randomUUID()}`;
+    try {
+      await rename(path, stale);
+    } catch {
+      return false;
+    }
+    await unlink(stale).catch(() => undefined);
+    try {
+      await create();
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  async releaseWatchRunLease(owner: string) {
+    const path = this.watchLeasePath();
+    try {
+      const existing = JSON.parse(await readFile(path, "utf8"));
+      if (existing.owner !== owner) return false;
+      await unlink(path);
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   private enqueuePersist() {

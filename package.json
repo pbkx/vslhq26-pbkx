@@ -16,6 +16,7 @@
     "preview:widget": "tsx scripts/buildWidgetPreview.ts",
     "data:ingest:grants": "tsx scripts/ingestGrantsGov.ts",
     "data:ingest:irs": "tsx scripts/ingestIrs990Pf.ts",
+    "data:refresh:irs": "tsx scripts/refreshIrs990Pf.ts",
     "data:refresh:usaspending": "tsx scripts/refreshUsaspending.ts",
     "data:status": "tsx scripts/dataStatus.ts"
   },

@@ -22,6 +22,13 @@ export interface OpportunityProvider{
 }
 export interface HistoricalAwardProvider{getHistoricalEvidence(opportunity:GrantOpportunity,organization:OrganizationProfile,project:ProjectProfile):Promise<HistoricalEvidence>}
 
+export class OpportunityNotFoundError extends Error {
+ constructor(message="The opportunity is no longer available from its source."){
+  super(message);
+  this.name="OpportunityNotFoundError";
+ }
+}
+
 async function fetchRetry(url:string,init:RequestInit){
  let last:unknown;
  for(let attempt=0;attempt<2;attempt++){
@@ -64,16 +71,43 @@ export class GrantsGovProvider implements OpportunityProvider{
   return combined.length?combined:this.fallback.search(query);
  }
  async getById(id:string){return localGrantIndex.getFederal(id)??this.fallback.getById(id)}
- async verifySelected(opportunity:GrantOpportunity){
+ async verifySelected(opportunity:GrantOpportunity,force=false){
   if(opportunity.source!=="grants-gov"||!opportunity.sourceId.match(/^\d+$/))return opportunity;
   const cached=await grantCache.getOrLoad(`grants-gov:verify:${opportunity.sourceId}`,15*60_000,async()=>{
-   const response=await fetchRetry(`${process.env.GRANTS_GOV_API_BASE_URL??"https://api.grants.gov"}/v1/api/fetchOpportunity`,{
-    method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({opportunityId:Number(opportunity.sourceId)}),
-   });
+   let response:Response;
+   try{
+    response=await fetchRetry(`${process.env.GRANTS_GOV_API_BASE_URL??"https://api.grants.gov"}/v1/api/fetchOpportunity`,{
+     method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({opportunityId:Number(opportunity.sourceId)}),
+    });
+   }catch(error){
+    if(error instanceof Error&&/\bHTTP 404\b/i.test(error.message))
+     throw new OpportunityNotFoundError();
+    throw error;
+   }
    const body:any=await response.json(),data=body.data;
-   if(!data||body.errorcode!==0)throw new Error(body.msg??"Grants.gov did not return an opportunity");
+   if(!data||body.errorcode!==0){
+    const message=String(body.msg??"Grants.gov did not return an opportunity");
+    if(/not found|no (?:such )?opportun|does not exist|removed/i.test(message))
+     throw new OpportunityNotFoundError(message);
+    throw new Error(message);
+   }
    const detail=data.synopsis??data.forecast??{},verifiedAt=new Date().toISOString();
-   const status:String=String(data.docType??detail.docType??opportunity.opportunityStatus);
+   const status=String(
+    data.ost
+    ??data.opportunityStatus
+    ??data.oppStatus
+    ??data.status
+    ??detail.opportunityStatus
+    ??data.docType
+    ??detail.docType
+    ??opportunity.opportunityStatus
+   );
+   const opportunityStatus:GrantOpportunity["opportunityStatus"]=
+    /archiv|cancel|withdraw/i.test(status)?"archived":
+    /closed|expired/i.test(status)?"closed":
+    /forecast/i.test(status)?"forecasted":
+    /posted|open|active/i.test(status)?"open":
+    opportunity.opportunityStatus;
    return{
     ...opportunity,title:String(data.opportunityTitle??opportunity.title),
     funderName:String(detail.agencyName??data.agencyDetails?.agencyName??opportunity.funderName),
@@ -84,10 +118,13 @@ export class GrantsGovProvider implements OpportunityProvider{
     deadline:date(detail.responseDate)??date(detail.responseDateDesc)??opportunity.deadline,
     lastUpdated:date(detail.lastUpdatedDate)??opportunity.lastUpdated,lastVerifiedAt:verifiedAt,
     assistanceListingNumbers:Array.isArray(data.alns)?data.alns.map((item:any)=>String(item.alnNumber)).filter(Boolean):opportunity.assistanceListingNumbers,
-    opportunityStatus:/forecast/i.test(String(status))?"forecasted":opportunity.opportunityStatus,
+    opportunityStatus,
+    recordCategory:opportunityStatus==="forecasted"
+     ?"forecasted-federal-opportunity"
+     :"current-federal-opportunity",
     sourceDisclaimer:`Official federal opportunity. Selected fields were verified through the Grants.gov fetchOpportunity API ${verifiedAt.slice(0,10)}; confirm final requirements on Grants.gov.`,
    } satisfies GrantOpportunity;
-  },false);
+  },force);
   return cached.data;
  }
  private async searchLive(queries:string[]){

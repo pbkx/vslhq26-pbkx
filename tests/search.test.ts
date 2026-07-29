@@ -1,4 +1,4 @@
-import{describe,expect,it}from"vitest";import{demoOrganization,demoProject}from"../src/data/demoProfiles.js";import{DEFAULT_WEIGHTS}from"../src/domain/types.js";import{buildRetrievalQueries,inferAwardRange,inferRequestedResultCount,inferResultTypes,prefersMostlyCurrentFederal,rescoreGrants,searchGrants}from"../src/services/grantSearchService.js";
+import{describe,expect,it}from"vitest";import{demoOrganization,demoProject}from"../src/data/demoProfiles.js";import{DEFAULT_WEIGHTS}from"../src/domain/types.js";import{buildRetrievalQueries,inferAwardRange,inferRequestedResultCount,inferResultTypes,prefersMostlyCurrentFederal,rescoreGrants,searchGrants,watchRefreshFilters}from"../src/services/grantSearchService.js";
 import{inferProfilesFromQuery}from"../src/services/profileInference.js";
 const exactPrompt="Find grants for a Washington nonprofit teaching practical AI skills to low-income adults. We need between $100,000 and $500,000.";
 describe("multi-source search",()=>{
@@ -78,6 +78,15 @@ describe("multi-source search",()=>{
   expect(result.awardRange).toBeUndefined();
   expect(result.grants.length).toBeGreaterThan(0);
   expect(result.grants.every(item=>item.score.components.programSizeFit.reasons[0]?.includes("No target award size was requested"))).toBe(true);
+ });
+ it("lets watch sensitivity replace the original search minimum score",()=>{
+  const saved={
+   searchCriteria:{
+    filters:{onlyOpen:true,minimumScore:80,maximumAward:500000},
+   },
+  }as any;
+  expect(watchRefreshFilters(saved)).toEqual({onlyOpen:true,maximumAward:500000});
+  expect(saved.searchCriteria.filters.minimumScore).toBe(80);
  });
  it("treats below an amount as a ceiling and returns relevant hunger-relief records",async()=>{
   const query="Find hunger-relief funding opportunities for a Washington nonprofit with awards below $500,000.";

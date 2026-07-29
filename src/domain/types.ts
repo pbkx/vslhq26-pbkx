@@ -31,24 +31,26 @@ export type SearchOutput={queryId:string;searchedAt:string;resultCount:number;so
 export type GrantWatchMatchQuality="worth-reviewing"|"strong"|"top-only";
 export type GrantWatchFrequency="as-detected"|"daily"|"weekly";
 export type GrantWatchScope="search"|"selected-grant";
-export type GrantWatchNotificationType="new-match"|"deadline-change"|"opportunity-amended"|"opportunity-closing"|"score-increased";
+export type GrantWatchNotificationType="new-match"|"deadline-change"|"opportunity-amended"|"opportunity-closing"|"opportunity-closed"|"opportunity-removed"|"no-longer-matching"|"score-increased";
 export type GrantWatchGrantState={
  deadline?:string;
  lastUpdated?:string;
  score:number;
  fingerprint:string;
+ opportunityStatus?:GrantOpportunity["opportunityStatus"];
 };
 export type GrantWatch={
  id:string;
  queryId:string;
  email:string;
+ ownerKey?:string;
  matchQuality:GrantWatchMatchQuality;
  minimumScore:number;
  frequency:GrantWatchFrequency;
  scope:GrantWatchScope;
  deadlineLeadDays:number;
  notificationTypes:GrantWatchNotificationType[];
- status:"active"|"paused";
+ status:"pending-confirmation"|"active"|"paused"|"confirmation-failed";
  createdAt:string;
  nextCheckAt:string;
  copilotReturnUrl?:string;

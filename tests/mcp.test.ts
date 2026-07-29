@@ -47,6 +47,13 @@ describe("GrantPilot MCP", () => {
       "daily",
       "weekly",
     ]);
+    expect((createWatch.inputSchema as any).properties.notificationTypes.items.enum).toEqual(
+      expect.arrayContaining([
+        "opportunity-closed",
+        "opportunity-removed",
+        "no-longer-matching",
+      ]),
+    );
     expect(createWatch.description).toContain("plain-language");
 
     const limited = await client.callTool({

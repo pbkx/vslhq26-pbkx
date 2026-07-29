@@ -254,6 +254,30 @@ const alertPresentation = (
         intro: "GrantPilot detected a newer source record for this opportunity. Confirm the current deadline and revise your application plan if needed.",
         accent: "#78a8ff",
       };
+    case "opportunity-closed":
+      return {
+        subject: `Opportunity closed · ${title}`,
+        eyebrow: "Status change",
+        headline: "This opportunity closed or was archived",
+        intro: "GrantPilot verified a closed or archived status at the source. Stop application work until the official record confirms another valid submission path.",
+        accent: "#e69a3a",
+      };
+    case "opportunity-removed":
+      return {
+        subject: `Opportunity removed · ${title}`,
+        eyebrow: "Source change",
+        headline: "This watched opportunity is no longer available",
+        intro: "The exact source record could no longer be retrieved. Review the official source to determine whether it was removed, replaced, or assigned a new identifier.",
+        accent: "#e69a3a",
+      };
+    case "no-longer-matching":
+      return {
+        subject: `GrantPilot match changed · ${title}`,
+        eyebrow: "Match change",
+        headline: "This candidate no longer matches the saved criteria",
+        intro: "A fresh search or rescore no longer places this candidate above the watch threshold. Review the updated evidence before continuing pursuit.",
+        accent: "#a8a8a2",
+      };
     case "opportunity-amended":
       return {
         subject: `Opportunity updated · ${title}`,

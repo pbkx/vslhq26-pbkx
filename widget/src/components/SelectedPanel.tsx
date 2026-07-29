@@ -128,6 +128,9 @@ const WATCH_NOTIFICATION_OPTIONS: Array<{
 }> = [
   { id: "new-match", label: "New matching opportunities" },
   { id: "opportunity-closing", label: "Approaching deadlines" },
+  { id: "opportunity-closed", label: "Opportunity closes or is archived" },
+  { id: "opportunity-removed", label: "Opportunity is removed" },
+  { id: "no-longer-matching", label: "Candidate no longer matches" },
   { id: "opportunity-amended", label: "Official record updates" },
   { id: "score-increased", label: "A candidate becomes a stronger fit" },
 ];
@@ -162,6 +165,9 @@ export function SelectedPanel({
   const [notificationTypes, setNotificationTypes] = useState<WatchNotificationType[]>([
     "new-match",
     "opportunity-closing",
+    "opportunity-closed",
+    "opportunity-removed",
+    "no-longer-matching",
   ]);
   const [busy, setBusy] = useState(false);
   const kind = eligibilityKind(grant.score.eligibilityStatus);

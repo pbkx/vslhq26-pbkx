@@ -32,6 +32,7 @@ function grant({
   deadline = "2026-10-01",
   lastUpdated = "2026-07-20",
   summary = `Summary for ${id}`,
+  status = "open",
 }: {
   id: string;
   title?: string;
@@ -39,6 +40,7 @@ function grant({
   deadline?: string;
   lastUpdated?: string;
   summary?: string;
+  status?: "open" | "closed" | "archived";
 }) {
   return {
     opportunity: {
@@ -58,7 +60,7 @@ function grant({
       awardMax: 500_000,
       deadline,
       lastUpdated,
-      opportunityStatus: "open",
+      opportunityStatus: status,
       sourceUrl: `https://example.org/${id}`,
       sourceDisclaimer: "Verify at the official source.",
       requirements: [],
@@ -317,5 +319,140 @@ describe("grant watch refresh and delivery", () => {
     expect(repository.currentWatch.lastCheckedAt).toBe(
       "2026-07-29T12:00:00.000Z",
     );
+  });
+
+  it("refreshes a selected grant directly without running the bounded saved search", async () => {
+    const initial = search([
+      grant({ id: "selected", score: 72 }),
+      ...Array.from({ length: 20 }, (_, index) => grant({ id: `other-${index}` })),
+    ]);
+    const repository = new FakeRepository(
+      initial,
+      watch(initial, {
+        scope: "selected-grant",
+        selectedGrantId: "selected",
+        notificationTypes: ["deadline-change"],
+      }),
+    );
+    const mailer = new FakeMailer("sent");
+    let broadRefreshCalls = 0;
+    let directRefreshCalls = 0;
+
+    await runGrantWatchChecks({
+      repository,
+      mailer,
+      now: () => now,
+      refreshSearch: async () => {
+        broadRefreshCalls += 1;
+        return search([]);
+      },
+      refreshSelected: async (_saved, grantId) => {
+        directRefreshCalls += 1;
+        expect(grantId).toBe("selected");
+        return {
+          status: "found",
+          grant: grant({ id: "selected", score: 72, deadline: "2026-11-15" }),
+        };
+      },
+    });
+
+    expect(broadRefreshCalls).toBe(0);
+    expect(directRefreshCalls).toBe(1);
+    expect(mailer.messages).toHaveLength(1);
+    expect(mailer.messages[0]?.subject).toContain("digest");
+  });
+
+  it("alerts when an exact selected source record is removed", async () => {
+    const selected = grant({ id: "selected" });
+    const initial = search([selected]);
+    const repository = new FakeRepository(
+      initial,
+      watch(initial, {
+        scope: "selected-grant",
+        selectedGrantId: "selected",
+        notificationTypes: ["opportunity-removed"],
+      }),
+    );
+    const mailer = new FakeMailer("sent");
+
+    await runGrantWatchChecks({
+      repository,
+      mailer,
+      now: () => now,
+      refreshSelected: async () => ({
+        status: "removed",
+        previousGrant: selected,
+      }),
+    });
+
+    expect(mailer.messages).toHaveLength(1);
+    expect(mailer.messages[0]?.html).toContain("Opportunity removed from its source");
+    expect(repository.currentWatch.lastNotifiedEventKeys).toContain(
+      "opportunity-removed:selected",
+    );
+    expect(repository.currentWatch.lastSeenGrantState).toEqual({});
+  });
+
+  it("alerts when a broad-search candidate disappears or stops meeting the watch threshold", async () => {
+    const disappearing = grant({ id: "disappearing", score: 77 });
+    const initial = search([disappearing]);
+    const repository = new FakeRepository(
+      initial,
+      watch(initial, { notificationTypes: ["no-longer-matching"] }),
+    );
+    const mailer = new FakeMailer("sent");
+
+    await runGrantWatchChecks({
+      repository,
+      mailer,
+      now: () => now,
+      refreshSearch: async () => search([]),
+    });
+
+    expect(mailer.messages).toHaveLength(1);
+    expect(mailer.messages[0]?.html).toContain("No longer matches the saved criteria");
+  });
+
+  it("alerts when a directly refreshed selected opportunity closes", async () => {
+    const selected = grant({ id: "selected", status: "open" });
+    const initial = search([selected]);
+    const repository = new FakeRepository(
+      initial,
+      watch(initial, {
+        scope: "selected-grant",
+        selectedGrantId: "selected",
+        notificationTypes: ["opportunity-closed"],
+      }),
+    );
+    const mailer = new FakeMailer("sent");
+
+    await runGrantWatchChecks({
+      repository,
+      mailer,
+      now: () => now,
+      refreshSelected: async () => ({
+        status: "found",
+        grant: grant({ id: "selected", status: "closed" }),
+      }),
+    });
+
+    expect(mailer.messages).toHaveLength(1);
+    expect(mailer.messages[0]?.html).toContain("closed or archived");
+  });
+
+  it("skips a concurrent runner when the shared lease is held", async () => {
+    const initial = search([grant({ id: "selected" })]);
+    const repository = new FakeRepository(initial, watch(initial)) as FakeRepository & {
+      acquireWatchRunLease: () => Promise<boolean>;
+      releaseWatchRunLease: () => Promise<boolean>;
+    };
+    repository.acquireWatchRunLease = async () => false;
+    repository.releaseWatchRunLease = async () => true;
+    const mailer = new FakeMailer("sent");
+
+    const result = await runGrantWatchChecks({ repository, mailer, now: () => now });
+
+    expect(result.status).toBe("skipped-overlapping-run");
+    expect(mailer.messages).toHaveLength(0);
   });
 });

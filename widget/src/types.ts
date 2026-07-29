@@ -115,6 +115,9 @@ export type WatchNotificationType =
   | "deadline-change"
   | "opportunity-amended"
   | "opportunity-closing"
+  | "opportunity-closed"
+  | "opportunity-removed"
+  | "no-longer-matching"
   | "score-increased";
 
 export type WatchSettings = {

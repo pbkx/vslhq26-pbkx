@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import type {
   GrantResult,
   GrantWatch,
@@ -11,7 +11,11 @@ import type {
 import { grantRepository } from "../repositories/grantRepository.js";
 import type { EmailService } from "./emailService.js";
 import { emailService } from "./emailService.js";
-import { refreshSavedSearch } from "./grantSearchService.js";
+import {
+  refreshSavedSearch,
+  refreshSelectedGrant,
+  type SelectedGrantRefreshResult,
+} from "./grantSearchService.js";
 import {
   buildWatchAlertEmail,
   buildWatchDigestEmail,
@@ -25,13 +29,21 @@ import {
 type WatchRepository = Pick<
   typeof grantRepository,
   "getSearch" | "listWatches" | "saveWatch"
->;
+> & Partial<Pick<
+  typeof grantRepository,
+  "acquireWatchRunLease" | "releaseWatchRunLease"
+>>;
 
 type WatchRunnerOptions = {
   repository?: WatchRepository;
   mailer?: EmailService;
   refreshSearch?: (search: SearchOutput) => Promise<SearchOutput>;
+  refreshSelected?: (
+    search: SearchOutput,
+    grantId: string,
+  ) => Promise<SelectedGrantRefreshResult>;
   now?: () => number;
+  leaseOwner?: string;
 };
 
 type DetectedWatchEvent = {
@@ -44,6 +56,9 @@ type DetectedWatchEvent = {
 const DEFAULT_NOTIFICATIONS: GrantWatchNotificationType[] = [
   "new-match",
   "opportunity-closing",
+  "opportunity-closed",
+  "opportunity-removed",
+  "no-longer-matching",
 ];
 
 const opportunityFingerprint = (grant: GrantResult) =>
@@ -72,6 +87,7 @@ export function buildWatchGrantState(search: SearchOutput) {
         lastUpdated: grant.opportunity.lastUpdated,
         score: Math.round(grant.score.overallScore),
         fingerprint: opportunityFingerprint(grant),
+        opportunityStatus: grant.opportunity.opportunityStatus,
       } satisfies GrantWatchGrantState,
     ]),
   );
@@ -89,8 +105,10 @@ function detectEvents(
   watch: GrantWatch,
   refreshed: SearchOutput,
   previousState: Record<string, GrantWatchGrantState>,
+  previousGrants: Map<string, GrantResult>,
   notifiedEvents: Set<string>,
   now: number,
+  selectedRefresh?: SelectedGrantRefreshResult,
 ) {
   const notificationTypes = watch.notificationTypes?.length
     ? watch.notificationTypes
@@ -105,6 +123,10 @@ function detectEvents(
       || grant.score.overallScore >= watch.minimumScore
     );
   const events: DetectedWatchEvent[] = [];
+  const candidateIds = new Set(candidates.map((grant) => grant.opportunity.id));
+  const refreshedById = new Map(
+    refreshed.grants.map((grant) => [grant.opportunity.id, grant] as const),
+  );
 
   for (const grant of candidates) {
     const id = grant.opportunity.id;
@@ -161,9 +183,58 @@ function detectEvents(
           daysRemaining,
         }
         : undefined,
+      notificationTypes.includes("opportunity-closed")
+        && previous
+        && ["closed", "archived"].includes(grant.opportunity.opportunityStatus)
+        && previous.opportunityStatus !== grant.opportunity.opportunityStatus
+        ? {
+          grant,
+          notificationType: "opportunity-closed",
+          key: `opportunity-closed:${id}:${grant.opportunity.opportunityStatus}`,
+          daysRemaining,
+        }
+        : undefined,
     ];
     for (const event of possible) {
       if (event && !notifiedEvents.has(event.key)) events.push(event);
+    }
+  }
+
+  if (
+    watch.scope === "selected-grant"
+    && selectedRefresh?.status === "removed"
+    && notificationTypes.includes("opportunity-removed")
+  ) {
+    const id = selectedRefresh.previousGrant.opportunity.id;
+    const event = {
+      grant: selectedRefresh.previousGrant,
+      notificationType: "opportunity-removed" as const,
+      key: `opportunity-removed:${id}`,
+    };
+    if (!notifiedEvents.has(event.key)) events.push(event);
+  }
+
+  if (
+    watch.scope === "search"
+    && notificationTypes.includes("no-longer-matching")
+  ) {
+    for (const [id, previous] of Object.entries(previousState)) {
+      if (previous.score < watch.minimumScore || candidateIds.has(id)) continue;
+      const oldGrant = previousGrants.get(id);
+      if (!oldGrant) continue;
+      const current = refreshedById.get(id);
+      if (current && ["closed", "archived"].includes(current.opportunity.opportunityStatus)) {
+        continue;
+      }
+      const key = `no-longer-matching:${id}:${previous.fingerprint}`;
+      if (!notifiedEvents.has(key)) {
+        events.push({
+          grant: current ?? oldGrant,
+          notificationType: "no-longer-matching",
+          key,
+          daysRemaining: current ? daysUntil(current, now) : undefined,
+        });
+      }
     }
   }
   return events;
@@ -194,9 +265,23 @@ export async function runGrantWatchChecks(options: WatchRunnerOptions = {}) {
   const repository = options.repository ?? grantRepository;
   const mailer = options.mailer ?? emailService;
   const refreshSearch = options.refreshSearch ?? refreshSavedSearch;
+  const refreshSelected = options.refreshSelected ?? refreshSelectedGrant;
   const now = options.now?.() ?? Date.now();
   const checkedAt = new Date(now).toISOString();
   const results: Array<Record<string, unknown>> = [];
+  const leaseOwner = options.leaseOwner ?? `watch-run-${process.pid}-${randomUUID()}`;
+  const leaseAcquired = repository.acquireWatchRunLease
+    ? await repository.acquireWatchRunLease(leaseOwner)
+    : true;
+  if (!leaseAcquired) {
+    return {
+      checkedAt,
+      watchCount: 0,
+      events: [],
+      status: "skipped-overlapping-run",
+    };
+  }
+  try {
   const activeWatches = repository
     .listWatches()
     .filter((item) => item.status === "active");
@@ -225,10 +310,25 @@ export async function runGrantWatchChecks(options: WatchRunnerOptions = {}) {
     const notifiedEvents = new Set(storedWatch.lastNotifiedEventKeys ?? []);
     let savedSearch: SearchOutput;
     let refreshed: SearchOutput;
+    let selectedRefresh: SelectedGrantRefreshResult | undefined;
 
     try {
       savedSearch = repository.getSearch(storedWatch.queryId);
-      refreshed = await refreshSearch(savedSearch);
+      if (scope === "selected-grant") {
+        if (!storedWatch.selectedGrantId) throw new Error("Selected grant watch has no grant ID.");
+        selectedRefresh = await refreshSelected(savedSearch, storedWatch.selectedGrantId);
+        if (selectedRefresh.status === "unavailable") {
+          throw new Error(selectedRefresh.error);
+        }
+        refreshed = {
+          ...savedSearch,
+          searchedAt: checkedAt,
+          grants: selectedRefresh.status === "found" ? [selectedRefresh.grant] : [],
+          resultCount: selectedRefresh.status === "found" ? 1 : 0,
+        };
+      } else {
+        refreshed = await refreshSearch(savedSearch);
+      }
     } catch (error) {
       await repository.saveWatch({
         ...normalizedWatch,
@@ -246,12 +346,17 @@ export async function runGrantWatchChecks(options: WatchRunnerOptions = {}) {
     const previousState = storedWatch.lastSeenGrantState
       ?? buildWatchGrantState(savedSearch);
     const refreshedState = buildWatchGrantState(refreshed);
+    const previousGrants = new Map(
+      savedSearch.grants.map((grant) => [grant.opportunity.id, grant] as const),
+    );
     const detected = detectEvents(
       normalizedWatch,
       refreshed,
       previousState,
+      previousGrants,
       notifiedEvents,
       now,
+      selectedRefresh,
     );
 
     if (!detected.length) {
@@ -351,4 +456,9 @@ export async function runGrantWatchChecks(options: WatchRunnerOptions = {}) {
     watchCount: activeWatches.length,
     events: results,
   };
+  } finally {
+    if (repository.releaseWatchRunLease) {
+      await repository.releaseWatchRunLease(leaseOwner);
+    }
+  }
 }
