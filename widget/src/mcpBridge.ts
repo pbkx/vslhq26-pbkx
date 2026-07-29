@@ -159,3 +159,45 @@ export async function openLink(url: string) {
   await navigator.clipboard?.writeText(url);
   throw new Error("Source link copied because direct navigation is unavailable.");
 }
+
+const DEFAULT_COPILOT_URL = "https://m365.cloud.microsoft/chat";
+const ALLOWED_COPILOT_HOSTS = new Set([
+  "m365.cloud.microsoft",
+  "www.microsoft365.com",
+  "www.office.com",
+  "teams.microsoft.com",
+]);
+
+function safeCopilotUrl(value: unknown) {
+  if (typeof value !== "string" || !value.trim()) return undefined;
+  try {
+    const url = new URL(value);
+    const allowed = url.protocol === "https:"
+      && (ALLOWED_COPILOT_HOSTS.has(url.hostname) || url.hostname.endsWith(".teams.microsoft.com"));
+    return allowed ? url.href : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+export function getCopilotReturnUrl() {
+  const hostContext = (mcpApp.getHostContext() ?? {}) as Record<string, unknown>;
+  const microsoftContext = (
+    typeof hostContext.microsoft === "object" && hostContext.microsoft
+      ? hostContext.microsoft
+      : {}
+  ) as Record<string, unknown>;
+  const candidates = [
+    hostContext.conversationUrl,
+    hostContext.chatUrl,
+    hostContext.returnUrl,
+    microsoftContext.conversationUrl,
+    microsoftContext.chatUrl,
+    document.referrer,
+  ];
+  for (const candidate of candidates) {
+    const url = safeCopilotUrl(candidate);
+    if (url) return url;
+  }
+  return DEFAULT_COPILOT_URL;
+}

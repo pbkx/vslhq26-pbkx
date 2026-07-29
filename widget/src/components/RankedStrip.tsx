@@ -54,7 +54,7 @@ function rankedEligibility(kind: ReturnType<typeof eligibilityKind>) {
 }
 
 function rankedDeadline(grant: GrantResult) {
-  return grant.opportunity.source === "irs-990pf" ? "No confirmed deadline" : formatDeadline(grant);
+  return grant.opportunity.source === "irs-990pf" ? "No deadline" : formatDeadline(grant);
 }
 
 export function RankedStrip({
@@ -104,7 +104,7 @@ export function RankedStrip({
                 <span>Award</span>
                 <span>Deadline</span>
                 <span>Eligibility</span>
-                <span>Compare</span>
+                <span>Add</span>
               </div>
 
               <div className="ranked-list">
@@ -132,15 +132,25 @@ export function RankedStrip({
                         <strong>{grant.opportunity.title}</strong>
                         <small>{grant.opportunity.funderName}</small>
                       </span>
-                      <span className={`rank-source-badge ${privateSource ? "private" : "federal"}`}>
+                      <span
+                        className={`rank-row-icon rank-source-icon ${privateSource ? "private" : "federal"} ${
+                          grant.opportunity.recordCategory === "forecasted-federal-opportunity" ? "forecast" : ""
+                        }`}
+                        title={rankedSource(grant)}
+                        role="img"
+                        aria-label={rankedSource(grant)}
+                      >
                         <RowIcon name={privateSource ? "private" : "federal"} />
-                        {rankedSource(grant)}
                       </span>
                       <span className="rank-award">{awardRange(grant)}</span>
                       <span className={`rank-deadline ${privateSource ? "muted" : ""}`}>{rankedDeadline(grant)}</span>
-                      <span className={`rank-eligibility-badge ${kind}`}>
+                      <span
+                        className={`rank-row-icon rank-eligibility-icon ${kind}`}
+                        title={rankedEligibility(kind)}
+                        role="img"
+                        aria-label={rankedEligibility(kind)}
+                      >
                         <RowIcon name={kind} />
-                        {rankedEligibility(kind)}
                       </span>
                       <label
                         className="compare-check"

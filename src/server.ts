@@ -24,6 +24,11 @@ export function createHttpApp(){
 if(process.env.NODE_ENV!=="test"){
   const port=Number(process.env.PORT??3000),host=process.env.HOST??"0.0.0.0";
   const httpServer=createHttpApp().listen(port,host,()=>console.log(`[server] GrantPilot MCP listening on http://${host}:${port}/mcp`));
-  const shutdown=async()=>{console.log("[server] shutting down");await closeMcpTransports();httpServer.close(()=>process.exit(0))};
+  const watchPollInterval=Math.max(60_000,Number(process.env.WATCH_POLL_INTERVAL_MS??900_000));
+  const watchTimer=setInterval(()=>runGrantWatchChecks().catch(error=>
+    console.error("[watch] scheduled check failed",error instanceof Error?error.message:"Unknown error")
+  ),watchPollInterval);
+  watchTimer.unref();
+  const shutdown=async()=>{console.log("[server] shutting down");clearInterval(watchTimer);await closeMcpTransports();httpServer.close(()=>process.exit(0))};
   process.on("SIGINT",shutdown);process.on("SIGTERM",shutdown);
 }

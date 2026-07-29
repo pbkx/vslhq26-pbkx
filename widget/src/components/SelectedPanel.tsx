@@ -1,5 +1,12 @@
 import { useState } from "react";
-import type { GrantResult } from "../types";
+import type {
+  GrantResult,
+  WatchFrequency,
+  WatchMatchQuality,
+  WatchNotificationType,
+  WatchScope,
+  WatchSettings,
+} from "../types";
 import {
   awardRange,
   confidence,
@@ -99,6 +106,32 @@ function ActionIcon({ name }: { name: "source" | "compare" | "watch" | "copilot"
   );
 }
 
+function InfoIcon() {
+  return (
+    <svg aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 10.5v6" strokeLinecap="round" />
+      <circle cx="12" cy="7.5" r=".8" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
+const WATCH_QUALITY_OPTIONS: Array<{ id: WatchMatchQuality; label: string }> = [
+  { id: "worth-reviewing", label: "Worth reviewing or better" },
+  { id: "strong", label: "Strong matches only" },
+  { id: "top-only", label: "Top matches only" },
+];
+
+const WATCH_NOTIFICATION_OPTIONS: Array<{
+  id: WatchNotificationType;
+  label: string;
+}> = [
+  { id: "new-match", label: "New matching opportunities" },
+  { id: "opportunity-closing", label: "Approaching deadlines" },
+  { id: "opportunity-amended", label: "Official record updates" },
+  { id: "score-increased", label: "A candidate becomes a stronger fit" },
+];
+
 export function SelectedPanel({
   grant,
   detailsLoading,
@@ -118,13 +151,20 @@ export function SelectedPanel({
   onCompareSelected: () => void;
   onOpenSource: () => void;
   onAskCopilot: () => void;
-  onCreateWatch: (email: string) => Promise<void>;
+  onCreateWatch: (settings: WatchSettings) => Promise<void>;
 }) {
   const [watchOpen, setWatchOpen] = useState(false);
-  const [email, setEmail] = useState("grants@example.org");
+  const [email, setEmail] = useState("");
+  const [matchQuality, setMatchQuality] = useState<WatchMatchQuality>("worth-reviewing");
+  const [frequency, setFrequency] = useState<WatchFrequency>("daily");
+  const [scope, setScope] = useState<WatchScope>("search");
+  const [deadlineLeadDays, setDeadlineLeadDays] = useState(14);
+  const [notificationTypes, setNotificationTypes] = useState<WatchNotificationType[]>([
+    "new-match",
+    "opportunity-closing",
+  ]);
   const [busy, setBusy] = useState(false);
   const kind = eligibilityKind(grant.score.eligibilityStatus);
-  const warnings = [...grant.score.hardExclusions, ...grant.score.warnings];
   const eligibility = grant.score.components.applicantEligibility;
   const geography = grant.score.components.geographicFit;
   const mission = grant.score.components.missionAlignment;
@@ -205,12 +245,17 @@ export function SelectedPanel({
         })}
       </div>
 
-      <div className="evidence-disclaimer">
-        {!historical && <p>{grant.opportunity.sourceDisclaimer}</p>}
-        {historical && <strong>Evidence-backed potential private donor/funder candidate worth researching and possibly contacting.</strong>}
+      <div className="evidence-disclaimer" role="note">
+        <div className="evidence-info-label">
+          <InfoIcon />
+          <span>Info</span>
+        </div>
+        <p>
+          {historical
+            ? "Evidence-backed potential private donor/funder candidate worth researching and possibly contacting."
+            : grant.opportunity.sourceDisclaimer}
+        </p>
       </div>
-
-      {warnings.map((warning) => <div className="risk-note" key={warning}>△ {warning}</div>)}
 
       <div className="panel-action-grid">
         <button className="primary-action panel-source-action" onClick={onOpenSource}>
@@ -221,9 +266,9 @@ export function SelectedPanel({
           <ActionIcon name="compare" />
           <span>{inComparison ? "In comparison" : "Add to comparison"}</span>
         </button>
-        <button onClick={() => setWatchOpen((open) => !open)}>
+        <button className={watchOpen ? "selected-action" : ""} onClick={() => setWatchOpen((open) => !open)}>
           <ActionIcon name="watch" />
-          <span>{watchOpen ? "Close watch" : "Create watch"}</span>
+          <span>Create watch</span>
         </button>
         <button
           className={`panel-copilot-action ${comparisonReady ? "compare-ready-action" : "copilot-action"}`}
@@ -239,18 +284,107 @@ export function SelectedPanel({
           className="watch-form"
           onSubmit={async (event) => {
             event.preventDefault();
+            if (!notificationTypes.length) return;
             setBusy(true);
             try {
-              await onCreateWatch(email);
+              await onCreateWatch({
+                email,
+                matchQuality,
+                frequency,
+                scope,
+                deadlineLeadDays,
+                notificationTypes,
+              });
               setWatchOpen(false);
             } finally {
               setBusy(false);
             }
           }}
         >
-          <label>Email alerts<input type="email" required value={email} onChange={(event) => setEmail(event.target.value)} /></label>
-          <button disabled={busy}>{busy ? "Creating…" : "Create 80%+ watch"}</button>
-          <small>Uses Azure Communication Services Email when configured.</small>
+          <div className="watch-form-heading">
+            <div>
+              <h3>Create email watch</h3>
+              <p>Get notified when this search changes.</p>
+            </div>
+          </div>
+
+          <div className="watch-form-grid">
+            <label className="watch-email-field">
+              Email address
+              <input
+                type="email"
+                required
+                autoComplete="email"
+                placeholder="name@organization.org"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+              />
+            </label>
+            <label>
+              Frequency
+              <select value={frequency} onChange={(event) => setFrequency(event.target.value as WatchFrequency)}>
+                <option value="as-detected">As detected</option>
+                <option value="daily">Daily digest</option>
+                <option value="weekly">Weekly digest</option>
+              </select>
+            </label>
+            <label>
+              Watch
+              <select value={scope} onChange={(event) => setScope(event.target.value as WatchScope)}>
+                <option value="search">This search</option>
+                <option value="selected-grant">This grant only</option>
+              </select>
+            </label>
+            <label>
+              Match threshold
+              <select value={matchQuality} onChange={(event) => setMatchQuality(event.target.value as WatchMatchQuality)}>
+                {WATCH_QUALITY_OPTIONS.map((option) => (
+                  <option value={option.id} key={option.id}>{option.label}</option>
+                ))}
+              </select>
+            </label>
+            <label className={!notificationTypes.includes("opportunity-closing") ? "watch-field-disabled" : ""}>
+              Deadline reminder
+              <select
+                disabled={!notificationTypes.includes("opportunity-closing")}
+                value={deadlineLeadDays}
+                onChange={(event) => setDeadlineLeadDays(Number(event.target.value))}
+              >
+                <option value={7}>7 days before</option>
+                <option value={14}>14 days before</option>
+                <option value={30}>30 days before</option>
+              </select>
+            </label>
+          </div>
+
+          <fieldset className="watch-fieldset">
+            <legend>Notify me when</legend>
+            <div className="watch-notification-list">
+              {WATCH_NOTIFICATION_OPTIONS.map((option) => {
+                const checked = notificationTypes.includes(option.id);
+                return (
+                  <label key={option.id}>
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => setNotificationTypes((current) =>
+                        checked ? current.filter((item) => item !== option.id) : [...current, option.id])}
+                    />
+                    <span>{option.label}</span>
+                  </label>
+                );
+              })}
+            </div>
+          </fieldset>
+
+          {!notificationTypes.length && <p className="watch-error">Choose at least one alert reason.</p>}
+          <div className="watch-form-actions">
+            <button type="button" className="watch-cancel" onClick={() => setWatchOpen(false)}>Cancel</button>
+            <button type="submit" className="watch-submit" disabled={busy || !notificationTypes.length || !email.trim()}>
+              {busy ? "Creating…" : "Create watch"}
+            </button>
+          </div>
+          <small className="watch-footnote">Email alerts are delivered through Azure Communication Services. You can remove the watch at any time.</small>
         </form>
       )}
     </aside>

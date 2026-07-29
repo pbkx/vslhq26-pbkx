@@ -6,8 +6,8 @@ const synonymGroups=[
  ["artificial intelligence","ai","ai literacy","machine learning","responsible ai"],
  ["adult education","adult learning","community learning","continuing education"],
  ["low income","low-income","economically disadvantaged","underserved"],
- ["food security","food insecurity","hunger relief","hunger","food pantry","food cupboard","food bank","emergency food assistance","food distribution","free meals","groceries","meal distribution","community meals","food access"],
- ["nutrition access","nutrition assistance","healthy food","nutrition services"],
+ ["food security","food insecurity","hunger relief","hunger","food pantry","food cupboard","food bank","emergency food assistance","food distribution","free meals","groceries","meal distribution","community meals","food access","food assistance","snap","fdpir"],
+ ["nutrition access","nutrition assistance","nutrition education","nutrition services","healthy food","child nutrition"],
  ["housing stability","homelessness prevention","emergency shelter","affordable housing","homeless services"],
  ["community health","health access","public health","mental health services"],
  ["community arts","arts education","cultural preservation"],
@@ -26,7 +26,7 @@ const conceptPatterns:[string,RegExp][]=[
  ["workforce and careers",/\b(workforce|employment training|job training|career pathways?|career readiness|economic mobility|upskilling|reskilling|job placement)\b/i],
  ["adult learning",/\b(adult education|adult learning|adult learners?|continuing education)\b/i],
  ["economic inclusion",/\b(low-income|low income|underserved|disadvantaged|digital inclusion|digital equity|economic opportunity)\b/i],
- ["food access and hunger relief",/\b(food security|food insecurity|free food|free meals?|hot meals?|thanksgiving meals?|groceries|hunger|food pantry|food cupboard|food bank|emergency food|food distribution|meal distribution|community meals?|food rescue|food waste|nutrition assistance|nutrition access)\b/i],
+ ["food access and hunger relief",/\b(food security|food insecurity|free food|free meals?|hot meals?|thanksgiving meals?|groceries|hunger|food pantry|food cupboard|food bank|emergency food|food distribution|meal distribution|community meals?|food rescue|food waste|food assistance|nutrition assistance|nutrition access|nutrition education|nutrition services|child nutrition|snap|fdpir)\b/i],
  ["housing stability",/\b(housing stability|homelessness|homeless|emergency shelter|affordable housing)\b/i],
  ["community health",/\b(community health|health access|public health|mental health)\b/i],
  ["arts and culture",/\b(community arts|arts education|cultural preservation)\b/i],
@@ -94,7 +94,12 @@ export function scoreGrant(grant:GrantOpportunity,org:OrganizationProfile,projec
  const requestedConcepts=[...projectConcepts];
  const applicantText=grant.eligibleApplicantTypes.join(" ").toLowerCase(),orgType=org.organizationType.toLowerCase();
  const fullApplicantText=[grant.summary,...grant.eligibleApplicantTypes,...grant.requirements.map(requirement=>requirement.text)].join(" ").toLowerCase();
- const namedExclusive=/\b(only (?:the )?following applicant|only .{0,100} (?:is|are) eligible|single[- ]source funding|non-competitive .{0,80} available to|available only to)\b/i.test(fullApplicantText);
+ // “Only nonprofit organizations are eligible” supports a nonprofit; it is
+ // not the same as a named sole-source recipient. Reserve this hard exclusion
+ // for actual single-source/noncompetitive language.
+ const namedExclusive=/\b(single[- ]source funding|sole source|non-competitive .{0,120} available to)\b/i.test(
+  [grant.summary,...grant.eligibleApplicantTypes,...grant.requirements.map(requirement=>requirement.text)].join(" ")
+ );
  const normalizedOrgName=org.name.toLowerCase().replace(/[^a-z0-9 ]/g," ").trim();
  const genericOrgName=/^(new york |washington |california )?nonprofit( organization)?$|^user organization$/.test(normalizedOrgName);
  const exclusiveMatchesOrganization=!genericOrgName&&normalizedOrgName.length>5&&fullApplicantText.includes(normalizedOrgName);

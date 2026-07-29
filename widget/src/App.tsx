@@ -1,13 +1,19 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { callTool, connectBridge, followUp, openLink, setBridgeListeners } from "./mcpBridge";
+import {
+  callTool,
+  connectBridge,
+  followUp,
+  getCopilotReturnUrl,
+  openLink,
+  setBridgeListeners,
+} from "./mcpBridge";
 import { applyFilters, DEFAULT_FILTERS, type Filters, type ViewId } from "./grantView";
-import type { GrantResult, SearchOutput } from "./types";
+import type { GrantResult, SearchOutput, WatchSettings } from "./types";
 import GrantPilotMark from "./GrantPilotMark";
 import { ControlBar } from "./components/ControlBar";
 import { Visualization } from "./components/Visualizations";
 import { SelectedPanel } from "./components/SelectedPanel";
 import { RankedStrip } from "./components/RankedStrip";
-import { ComparisonTray } from "./components/ComparisonTray";
 
 export default function App() {
   const [data, setData] = useState<SearchOutput | null>(null);
@@ -15,7 +21,6 @@ export default function App() {
   const [view, setView] = useState<ViewId>(() => (globalThis as any).__GRANTPILOT_PREVIEW_VIEW__ ?? "matrix");
   const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS);
   const [comparison, setComparison] = useState<Set<string>>(new Set());
-  const [comparisonOpen, setComparisonOpen] = useState(false);
   const [notice, setNotice] = useState("");
   const [detailsLoading, setDetailsLoading] = useState("");
   const detailRequests = useRef(new Set<string>());
@@ -78,7 +83,12 @@ export default function App() {
         } : current);
       })
       .catch((error) => {
-        setNotice(error instanceof Error ? error.message : "Unable to load complete grant evidence.");
+        const message = error instanceof Error ? error.message : "Unable to load complete grant evidence.";
+        setNotice(
+          /Unknown grant|Unknown or expired query/i.test(message)
+            ? "This result belongs to an earlier server session. Run the search again once to refresh its evidence."
+            : message,
+        );
       })
       .finally(() => {
         detailRequests.current.delete(selectedId);
@@ -105,43 +115,41 @@ export default function App() {
         setNotice("Compare up to three opportunities at a time.");
         return current;
       }
-      if (next.size < 2) setComparisonOpen(false);
       return next;
     });
   }
 
   async function showComparison() {
     if (comparison.size < 2) return;
-    setComparisonOpen(true);
     const titles = compared.map((grant) => `"${grant.opportunity.title}"`);
-    const prompt = `Compare these selected grants: ${titles.length === 2 ? titles.join(" and ") : `${titles.slice(0, -1).join(", ")}, and ${titles.at(-1)}`}.`;
-    let comparisonLoaded = false;
-    try {
-      await callTool("compare_grants", { grantIds: [...comparison] });
-      comparisonLoaded = true;
-    } catch (error) {
-      setNotice(error instanceof Error ? `${error.message} Showing the loaded comparison.` : "Showing the loaded comparison.");
-    }
+    const prompt = `Compare the GrantPilot opportunities I selected: ${
+      titles.length === 2 ? titles.join(" and ") : `${titles.slice(0, -1).join(", ")}, and ${titles.at(-1)}`
+    }.`;
     try {
       await followUp(prompt);
-      setNotice(comparisonLoaded ? "Comparison evidence sent to Copilot." : "Comparison request sent to Copilot.");
+      setNotice("Comparison request sent to Copilot.");
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Unable to send the comparison request to Copilot.");
     }
   }
 
-  async function createWatch(email: string) {
+  async function createWatch(settings: WatchSettings) {
     if (!data || !selected) return;
     try {
       const result = await callTool("create_grant_watch", {
         queryId: data.queryId,
-        email,
-        minimumScore: 80,
-        notificationTypes: ["new-match", "opportunity-amended", "opportunity-closing"],
+        ...settings,
+        copilotReturnUrl: getCopilotReturnUrl(),
         selectedGrantId: selected.opportunity.id,
       });
-      const output = result as { id?: string; emailPreview?: { deliveryStatus?: string } };
-      setNotice(`Watch ${output.id ?? "created"} · email ${output.emailPreview?.deliveryStatus ?? "queued"}.`);
+      const output = result as {
+        id?: string;
+        settingsSummary?: string;
+        emailPreview?: { deliveryStatus?: string };
+      };
+      setNotice(
+        `Watch created · ${output.settingsSummary ?? "preferences saved"} · email ${output.emailPreview?.deliveryStatus ?? "queued"}.`,
+      );
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Unable to create the watch.");
       throw error;
@@ -194,7 +202,6 @@ export default function App() {
           onCreateWatch={createWatch}
         />
       </div>
-      {comparisonOpen && <ComparisonTray grants={compared} onClose={() => setComparisonOpen(false)} />}
       <RankedStrip
         grants={filtered}
         selectedId={selected.opportunity.id}

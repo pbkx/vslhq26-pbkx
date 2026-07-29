@@ -106,3 +106,23 @@ export type SearchOutput = {
 export type SearchOutputWire = Omit<SearchOutput, "grants"> & {
   grants: GraphGrantWire[];
 };
+
+export type WatchMatchQuality = "worth-reviewing" | "strong" | "top-only";
+export type WatchFrequency = "as-detected" | "daily" | "weekly";
+export type WatchScope = "search" | "selected-grant";
+export type WatchNotificationType =
+  | "new-match"
+  | "deadline-change"
+  | "opportunity-amended"
+  | "opportunity-closing"
+  | "score-increased";
+
+export type WatchSettings = {
+  email: string;
+  matchQuality: WatchMatchQuality;
+  frequency: WatchFrequency;
+  scope: WatchScope;
+  deadlineLeadDays: number;
+  notificationTypes: WatchNotificationType[];
+  copilotReturnUrl?: string;
+};

@@ -143,10 +143,26 @@ USASPENDING_API_BASE_URL=https://api.usaspending.gov
 EMAIL_PROVIDER=azure-communication-services
 AZURE_COMMUNICATION_SERVICES_CONNECTION_STRING=
 EMAIL_SENDER_ADDRESS=
+M365_COPILOT_RETURN_URL=https://m365.cloud.microsoft/chat
 ADMIN_WATCH_TOKEN=
+WATCH_POLL_INTERVAL_MS=900000
 ```
 
 With Azure Communication Services credentials missing, email actions return a clearly labeled `preview-only` result.
+
+Grant watches use plain-language sensitivity instead of requiring users to
+interpret a percentage: **Worth reviewing** (recommended), **Strong matches**,
+or **Top matches only**. A user can also choose the watched scope, alert
+reasons, deadline reminder window, and delivery cadence while keeping the
+single **Create watch** action. Confirmation and alert messages are responsive
+HTML emails styled to match the black-and-cream GrantPilot workbench. Every
+alert uses event-specific content and includes **Open in Copilot** plus the
+original evidence/source link. When the MCP host exposes the current
+conversation URL, GrantPilot preserves it with the watch; otherwise
+`M365_COPILOT_RETURN_URL` provides the safe Copilot fallback. The watch checker
+suppresses duplicate notifications for the same unchanged event. While the server is running, a lightweight
+background poll checks which watches are due; each watch still honors its own
+as-detected, daily, or weekly cadence.
 
 ## Demo (required)
 
@@ -168,7 +184,7 @@ Expected behavior:
 6. Selecting a grant silently hydrates its full evidence without a new chat message.
 7. Current federal opportunities are visibly separated from historical private-funder prospects.
 8. Rescoring reuses normalized records without repeating provider searches.
-9. A watch can be created; email is preview-only until Azure Communication Services is configured.
+9. Open **Create watch**, choose match sensitivity, alert reasons, cadence, scope, and email destination, then create the watch. Email is preview-only until Azure Communication Services is configured.
 
 ## Data ingestion and refresh
 

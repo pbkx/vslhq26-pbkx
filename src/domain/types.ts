@@ -12,5 +12,26 @@ export type GrantScore={grantId:string;overallScore:number;components:{missionAl
 export type HistoricalEvidence={score:number;confidence:number;reasons:string[];awardCount:number;medianAward?:number;washingtonAwards?:number;source:"irs-990pf"|"usaspending"|"unavailable"};
 export type GrantResult={opportunity:GrantOpportunity;score:GrantScore;chart:{applicationEffort:number;matchScore:number;awardAmount?:number;daysRemaining?:number}};
 export type SearchOutput={queryId:string;searchedAt:string;resultCount:number;sourceCounts:Record<GrantSource,number>;weights:MatchWeights;grants:GrantResult[];warnings:string[];organization:OrganizationProfile;project:ProjectProfile;awardRange?:{minimumAward?:number;maximumAward?:number}};
-export type GrantWatch={id:string;queryId:string;email:string;minimumScore:number;notificationTypes:string[];status:"active"|"paused";createdAt:string;nextCheckAt:string;selectedGrantId?:string};
+export type GrantWatchMatchQuality="worth-reviewing"|"strong"|"top-only";
+export type GrantWatchFrequency="as-detected"|"daily"|"weekly";
+export type GrantWatchScope="search"|"selected-grant";
+export type GrantWatchNotificationType="new-match"|"deadline-change"|"opportunity-amended"|"opportunity-closing"|"score-increased";
+export type GrantWatch={
+ id:string;
+ queryId:string;
+ email:string;
+ matchQuality:GrantWatchMatchQuality;
+ minimumScore:number;
+ frequency:GrantWatchFrequency;
+ scope:GrantWatchScope;
+ deadlineLeadDays:number;
+ notificationTypes:GrantWatchNotificationType[];
+ status:"active"|"paused";
+ createdAt:string;
+ nextCheckAt:string;
+ copilotReturnUrl?:string;
+ selectedGrantId?:string;
+ lastNotifiedGrantIds?:string[];
+ lastNotifiedEventKeys?:string[];
+};
 export const DEFAULT_WEIGHTS:MatchWeights={missionAlignment:.30,applicantEligibility:.20,geographicFit:.15,programSizeFit:.15,historicalSimilarity:.10,deadlineFeasibility:.10};

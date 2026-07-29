@@ -71,7 +71,12 @@ export function buildRetrievalQueries(input:Pick<SearchInput,"query"|"organizati
  if(includesAny(profileText,["low income","low-income","underserved","economic mobility"]))
   add("low income adults","underserved workers","economic opportunity","employment services","adult workforce");
  if(includesAny(profileText,["food security","food insecurity","free food","hunger","food pantry","food bank","meal distribution","nutrition access"]))
-  add("food security","food insecurity","hunger","hunger relief","food","free meals","groceries","food distribution","emergency food assistance","food pantry","community meals","nutrition assistance","food access");
+  add(
+   "food security","food insecurity","hunger","hunger relief","food","free meals",
+   "groceries","food distribution","emergency food assistance","food pantry",
+   "community meals","nutrition assistance","nutrition education","nutrition services",
+   "food assistance","food access","SNAP","FDPIR"
+  );
  if(includesAny(profileText,["housing stability","homelessness","homeless","emergency shelter","affordable housing"]))
   add("housing stability","homelessness prevention","emergency shelter","affordable housing");
  if(includesAny(profileText,["community health","health access","public health","mental health"]))
@@ -117,7 +122,9 @@ export function inferAwardRange(query?:string){
 export function inferResultTypes(query?:string):GrantResultType[]|undefined{
  if(!query)return undefined;
  const text=normalize(query);
- const current=/\b(current|currently open|active|open grants? only)\b/.test(text);
+ if(prefersMostlyCurrentFederal(query))
+  return["current-federal","forecasted-federal","historical-private-prospect"];
+ const current=/\b(current|currently open|active|open(?: federal)? grants?)\b/.test(text);
  const forecast=/\b(forecasted|forecast|upcoming federal)\b/.test(text);
  const historical=/\b(historical|irs|990-pf|foundation prospects?|private funder prospects?)\b/.test(text);
  const only=/\b(only|exclusively|just)\b/.test(text);
@@ -141,10 +148,26 @@ export function inferResultTypes(query?:string):GrantResultType[]|undefined{
  return undefined;
 }
 
+/**
+ * “Mostly/prefer federal” is a ranking preference, not an exclusion. Copilot
+ * may still send a current-federal-only tool argument, so the complete natural
+ * language query remains authoritative for this distinction.
+ */
+export function prefersMostlyCurrentFederal(query?:string){
+ if(!query)return false;
+ const text=normalize(query);
+ const namesFederal=/\b(?:open|current)?\s*federal grants?\b/.test(text);
+ const expressesPreference=/\b(mostly|primarily|prefer|preferred|priority|prioritize|prioritized)\b/.test(text)||
+  /\btarget(?:ing)?\b.{0,16}\b(mostly|primarily)\b/.test(text);
+ const expressesExclusivity=/\b(only|exclusively|just)\b.{0,28}\b(?:open|current)?\s*federal grants?\b/.test(text)||
+  /\bfederal grants?\b.{0,18}\b(only|exclusively)\b/.test(text);
+ return namesFederal&&expressesPreference&&!expressesExclusivity;
+}
+
 export function inferRequestedResultCount(query?:string){
  if(!query)return undefined;
  const text=query.replace(/,/g," ");
- const match=text.match(/\b(?:find|show|list|return|give\s+me|top)\s+(?:the\s+)?(\d{1,4})\b(?=[^$\n]{0,48}\bgrants?\b)/i)
+ const match=text.match(/\b(?:find|show|list|return|give\s+me|search\s+for)\s+(?:the\s+)?(?:like\s+|about\s+|around\s+|approximately\s+)?(\d{1,4})\b(?:(?=[^$\n]{0,48}\bgrants?\b)|(?=\s*(?:[.!?]|\n|$)))/i)
   ??text.match(/\b(\d{1,4})\s+(?:matching\s+|best\s+|ranked\s+)?grants?\b/i);
  if(!match)return undefined;
  const count=Number(match[1]);
@@ -175,9 +198,12 @@ function balancedResults(ranked:GrantResult[],limit:number,sources:GrantSource[]
 export async function searchGrants(input:SearchInput):Promise<SearchOutput>{
  const weights=input.weights??DEFAULT_WEIGHTS;
  validateWeights(weights);
- const resultTypes=input.resultTypes??inferResultTypes(input.query);
+ const federalFirst=prefersMostlyCurrentFederal(input.query);
+ const resultTypes=federalFirst
+  ?["current-federal","forecasted-federal","historical-private-prospect"] satisfies GrantResultType[]
+  :input.resultTypes??inferResultTypes(input.query);
  const inferredSources:GrantSource[]|undefined=resultTypes?[...new Set(resultTypes.map(type=>type==="historical-private-prospect"?"irs-990pf" as const:"grants-gov" as const))]:undefined;
- const sources=input.sources??inferredSources??["grants-gov","irs-990pf"];
+ const sources=federalFirst?["grants-gov","irs-990pf"] as GrantSource[]:input.sources??inferredSources??["grants-gov","irs-990pf"];
  const warnings:string[]=[];
  const limit=Math.max(1,Math.min(MAX_SEARCH_RESULTS,input.limit??80));
  const inferredRange=inferAwardRange(input.query);
@@ -205,7 +231,7 @@ export async function searchGrants(input:SearchInput):Promise<SearchOutput>{
   topics:input.project.topics,mission:input.organization.missionTopics,
  })).digest("hex");
  const candidateLimit=Math.min(420,Math.max(300,limit*30));
- const cached=await grantCache.getOrLoad<GrantOpportunity[]>(`search:v11:${key}`,3_600_000,async()=>{
+ const cached=await grantCache.getOrLoad<GrantOpportunity[]>(`search:v12:${key}`,3_600_000,async()=>{
   const settled=await Promise.all(providers.filter(provider=>sources.includes(provider.source)).map(async provider=>{
    try{return await provider.search({
     query:input.query,searchQueries,preferredStates,limit:candidateLimit,
@@ -239,7 +265,7 @@ export async function searchGrants(input:SearchInput):Promise<SearchOutput>{
   (!resultTypes||recordMatches(grant,resultTypes))&&
   // "Open" is a current-opportunity status and therefore applies only to
   // Grants.gov. IRS records remain eligible as clearly labeled prospects.
-  (!filters.onlyOpen||grant.source==="irs-990pf"||grant.opportunityStatus==="open")&&
+  (!filters.onlyOpen||federalFirst||grant.source==="irs-990pf"||grant.opportunityStatus==="open")&&
   (!filters.excludeCostShare||!grant.requiresCostShare)&&
   (!filters.minimumAward||(grant.awardMax??0)>=filters.minimumAward)&&
   (!filters.maximumAward||(grant.awardMin??Number.POSITIVE_INFINITY)<=filters.maximumAward)&&
@@ -264,19 +290,27 @@ export async function searchGrants(input:SearchInput):Promise<SearchOutput>{
   // recommendations for this organization.
   .filter(grant=>grant.opportunity.source==="irs-990pf"||grant.score.eligibilityStatus!=="likely-ineligible")
   .sort((a,b)=>{
+   if(federalFirst){
+    const sourceTier=(grant:GrantResult)=>
+     grant.opportunity.recordCategory==="current-federal-opportunity"?0:
+     grant.opportunity.recordCategory==="forecasted-federal-opportunity"?1:2;
+    const sourceDifference=sourceTier(a)-sourceTier(b);
+    if(sourceDifference)return sourceDifference;
+   }
    const tier=(grant:GrantResult)=>grant.score.components.missionAlignment.score>=65?1:0;
    return tier(b)-tier(a)||b.score.overallScore-a.score.overallScore;
   });
- const grants=balancedResults(ranked,limit,sources);
+ const grants=federalFirst?ranked.slice(0,limit):balancedResults(ranked,limit,sources);
 
  const federalCount=grants.filter(item=>item.opportunity.source==="grants-gov").length;
+ const currentFederalCount=grants.filter(item=>item.opportunity.recordCategory==="current-federal-opportunity").length;
  const privateCount=grants.filter(item=>item.opportunity.source==="irs-990pf").length;
- if(!federalCount&&sources.includes("grants-gov"))
+ if(!currentFederalCount&&sources.includes("grants-gov"))
   warnings.push(filters.minimumAward!==undefined||filters.maximumAward!==undefined
-   ?"No sufficiently mission-aligned current federal opportunity was found in the requested award range."
-   :"No sufficiently mission-aligned current federal opportunity was found.");
+   ?"No sufficiently mission-aligned current federal opportunity was found in the requested award range; relevant forecasted federal opportunities and private-funder evidence are shown as fallbacks."
+   :"No sufficiently mission-aligned current federal opportunity was found; relevant forecasted federal opportunities and private-funder evidence are shown as fallbacks.");
  if(grants.length<limit)
-  warnings.push(`Only ${grants.length} sufficiently relevant record${grants.length===1?"":"s"} matched; GrantPilot excluded unrelated results instead of padding the requested ${limit}.`);
+  warnings.push(`Only ${grants.length} sufficiently relevant record${grants.length===1?"":"s"} matched.`);
  if(privateCount){
   warnings.push(`${privateCount} result${privateCount===1?" is an":"s are"} evidence-backed potential private donor/funder candidate${privateCount===1?"":"s"} worth researching and possibly contacting.`);
   const privateWithPreferredHistory=grants.filter(item=>item.opportunity.source==="irs-990pf"&&
@@ -295,7 +329,12 @@ export async function searchGrants(input:SearchInput):Promise<SearchOutput>{
    ?{minimumAward:filters.minimumAward,maximumAward:filters.maximumAward}
    :undefined,
  };
- return grantRepository.saveSearch(output);
+ grantRepository.saveSearch(output);
+ // The widget may remain open while the development server restarts. Persist
+ // the normalized search before returning it so row-detail calls can resume
+ // from the same query instead of failing with an unknown grant ID.
+ await grantRepository.flush();
+ return output;
 }
 
 export function rescoreGrants(queryId:string,grantIds:string[],weights:MatchWeights){
