@@ -1,21 +1,172 @@
-import{useEffect,useMemo,useState}from"react";import{callTool,connectBridge,followUp,openLink,setBridgeListeners}from"./mcpBridge";import type{GrantResult,SearchOutput,Weights}from"./types";import GrantPilotMark from"./GrantPilotMark";
-const labels:Record<keyof Weights,string>={missionAlignment:"Mission",applicantEligibility:"Eligibility",geographicFit:"Geography",programSizeFit:"Program size",historicalSimilarity:"History",deadlineFeasibility:"Deadline"};
-const money=(n?:number)=>n===undefined?"Not stated":n>=1e6?`$${(n/1e6).toFixed(1)}M`:`$${Math.round(n/1000)}K`;
-const status=(value:string)=>value.replaceAll("-"," ").replace(/\b\w/g,x=>x.toUpperCase());
-export default function App(){const[data,setData]=useState<SearchOutput|null>(null),[selected,setSelected]=useState(""),[compare,setCompare]=useState<string[]>([]),[tab,setTab]=useState<"opportunities"|"compare"|"scores"|"watch">("opportunities"),[notice,setNotice]=useState(""),[email,setEmail]=useState("grants@example.org");
- useEffect(()=>{setBridgeListeners(next=>{setData(current=>{if(!next.append||!current)return next;const grants=[...current.grants,...next.grants].filter((item,index,all)=>all.findIndex(candidate=>candidate.opportunity.id===item.opportunity.id)===index),sourceCounts={"grants-gov":grants.filter(item=>item.opportunity.source==="grants-gov").length,"irs-990pf":grants.filter(item=>item.opportunity.source==="irs-990pf").length};return{...current,...next,append:false,resultCount:grants.length,totalResultCount:next.totalResultCount??current.totalResultCount,sourceCounts,grants,warnings:[...new Set([...current.warnings,...next.warnings])]}});setSelected(value=>value||next.grants[0]?.opportunity.id)},setNotice);connectBridge()},[]);
- const grant=useMemo(()=>data?.grants.find(x=>x.opportunity.id===selected)??data?.grants[0],[data,selected]);if(!data||!grant)return <main className="loading"><GrantPilotMark/><h2>Opening GrantPilot…</h2><p>Preparing the Grant Opportunity Workbench.</p></main>;
- async function changeWeight(key:keyof Weights,value:number){const old=data!.weights,next={...old,[key]:value/100},others=(Object.keys(old) as (keyof Weights)[]).filter(x=>x!==key),remainder=1-value/100,current=others.reduce((s,x)=>s+old[x],0);others.forEach(x=>next[x]=current?old[x]/current*remainder:remainder/others.length);setNotice("Recalculating cached scores…");try{await callTool("rescore_grants",{queryId:data!.queryId,grantIds:data!.grants.map(x=>x.opportunity.id),weights:next})}catch(e){setNotice(e instanceof Error?e.message:"Unable to rescore")}}
- async function loadMore(){setNotice("Loading the next ranked grants…");try{await callTool("load_more_grants",{queryId:data!.queryId,offset:data!.nextOffset??data!.grants.length});setNotice("More grants added to every visualization.")}catch(e){setNotice(e instanceof Error?e.message:"Unable to load more grants")}}
- async function watch(){try{const result=await callTool("create_grant_watch",{queryId:data!.queryId,email,minimumScore:80,notificationTypes:["new-match","opportunity-amended","opportunity-closing"],selectedGrantId:grant!.opportunity.id});setNotice(`Watch ${(result as any).id} created · email ${(result as any).emailPreview?.deliveryStatus}.`)}catch(e){setNotice(e instanceof Error?e.message:"Unable to create watch")}}
- const strong=data.grants.filter(x=>x.score.overallScore>=75).length,urgent=data.grants.filter(x=>(x.chart.daysRemaining??999)<=30).length,review=data.grants.filter(x=>x.score.eligibilityStatus.includes("verification")||x.score.eligibilityStatus.includes("ineligible")).length;
- return <main className="shell"><header><div className="brand"><GrantPilotMark/><div><b>GrantPilot</b><small>Opportunity Workbench</small></div></div><div className="summary"><strong>{data.resultCount}{(data.totalResultCount??data.resultCount)>data.resultCount?` of ${data.totalResultCount}`:""} opportunities loaded</strong><span>{strong} strong matches · {urgent} urgent · {review} need review</span></div></header>
- <section className="weights">{(Object.keys(data.weights) as (keyof Weights)[]).map(key=><label key={key}><span>{labels[key]} <b>{Math.round(data.weights[key]*100)}%</b></span><input type="range" min="5" max="50" value={Math.round(data.weights[key]*100)} onChange={e=>changeWeight(key,Number(e.target.value))}/></label>)}</section>
- <section className="work"><div className="plot"><div className="axis y">Match score</div><svg viewBox="0 0 760 430" role="img" aria-label="Grant match score by estimated application effort"><defs><linearGradient id="grid" x1="0" y1="0" x2="0" y2="1"><stop stopColor="#f7f9ff"/><stop offset="1" stopColor="#eef2fb"/></linearGradient></defs><rect x="55" y="20" width="675" height="360" rx="18" fill="url(#grid)"/>{[25,50,75,100].map(v=><g key={v}><line x1="55" x2="730" y1={380-v*3.6} y2={380-v*3.6}/><text x="45" y={385-v*3.6}>{v}</text></g>)}{data.grants.map((item,index)=>{const x=70+item.chart.applicationEffort*6.4,y=380-item.score.overallScore*3.6,r=Math.max(9,Math.min(20,(item.chart.awardAmount??100000)/40000));return <g className={`point ${item.opportunity.source==="irs-990pf"?"private":"federal"} ${item.opportunity.id===grant.opportunity.id?"selected":""}`} key={item.opportunity.id} onClick={()=>setSelected(item.opportunity.id)}><circle cx={x} cy={y} r={r}/><text x={x+r+5} y={y+4}>{index<6?item.opportunity.title.slice(0,24):""}</text><title>{item.opportunity.title} · {item.score.overallScore}% · {money(item.chart.awardAmount)}</title></g>})}<text className="axis-label" x="300" y="420">Estimated application effort →</text></svg><div className="legend"><span><i className="private"/>IRS historical prospect</span><span><i className="federal"/>Current/forecasted federal</span><em>Point size ≈ award amount</em></div></div>
- <aside><div className="source">{grant.opportunity.source==="irs-990pf"?"IRS 990-PF · historical prospect":"Grants.gov · federal"}<span>{status(grant.score.eligibilityStatus)}</span></div><h1>{grant.opportunity.title}</h1><p className="funder">{grant.opportunity.funderName}</p><div className="metrics"><div><strong>{grant.score.overallScore}</strong><small>Match</small></div><div><strong>{Math.round(Object.values(grant.score.components).reduce((s,c)=>s+c.confidence,0)/6)}</strong><small>Confidence</small></div><div><strong>{grant.chart.applicationEffort}</strong><small>Effort</small></div></div><div className="facts"><span>Award <b>{money(grant.opportunity.awardMin)}–{money(grant.opportunity.awardMax)}</b></span><span>{grant.opportunity.source==="irs-990pf"?"Application status":"Deadline"} <b>{grant.opportunity.source==="irs-990pf"?"Unknown · research required":grant.opportunity.deadline??"Verify source"}</b></span></div><p>{grant.opportunity.summary}</p><div className="warning">ⓘ {grant.opportunity.sourceDisclaimer}</div><h3>Why it matches</h3>{Object.entries(grant.score.components).slice(0,4).map(([key,value])=><div className="scoreline" key={key}><span>{labels[key as keyof Weights]} <b>{Math.round(value.score)}</b></span><i><b style={{width:`${value.score}%`}}/></i><small>{value.reasons[0]}</small></div>)}{[...grant.score.warnings,...grant.score.hardExclusions].map(x=><div className="warning" key={x}>△ {x}</div>)}<div className="actions"><button onClick={()=>openLink(grant.opportunity.applicationUrl??grant.opportunity.sourceUrl).catch(e=>setNotice(e.message))}>{grant.opportunity.source==="irs-990pf"?"Open IRS evidence":"Open official source"} ↗</button><button className="primary" onClick={()=>{setTab("watch");watch()}}>Watch</button></div><button className="ask" onClick={()=>followUp(`Explain the largest eligibility risks for ${grant.opportunity.title} and cite the returned GrantPilot evidence.`).catch(e=>setNotice(e.message))}>Ask Copilot about this record</button></aside></section>
- <nav>{(["opportunities","compare","scores","watch"]as const).map(x=><button className={tab===x?"active":""} onClick={()=>setTab(x)} key={x}>{status(x)}</button>)}</nav>
- {tab==="opportunities"&&<div className="drawer list">{data.grants.map(item=><button key={item.opportunity.id} onClick={()=>setSelected(item.opportunity.id)}><b>{item.score.overallScore}</b><span>{item.opportunity.title}<small>{item.opportunity.funderName} · {money(item.opportunity.awardMax)}</small></span><input type="checkbox" checked={compare.includes(item.opportunity.id)} onChange={e=>setCompare(v=>e.target.checked?[...v,item.opportunity.id].slice(-3):v.filter(id=>id!==item.opportunity.id))}/></button>)}{data.hasMore&&<button className="load-more" onClick={loadMore}><b>+</b><span>Load more grants<small>{data.totalResultCount?`${data.totalResultCount-data.resultCount} ranked records remaining`:"Next payload-sized page"}</small></span></button>}</div>}
- {tab==="compare"&&<div className="drawer"><h3>Comparison set ({compare.length}/3)</h3><button disabled={compare.length<2} onClick={()=>callTool("compare_grants",{grantIds:compare}).then(()=>setNotice("Comparison matrix sent to GrantPilot.")).catch(e=>setNotice(e.message))}>Compare selected grants</button><p>Select grants using the checkboxes in Opportunities.</p></div>}
- {tab==="scores"&&<div className="drawer"><h3>Transparent scoring</h3><p>30% mission alignment · 20% applicant eligibility · 15% geography · 15% program size · 10% historical similarity · 10% deadline feasibility. Unknown fields lower confidence; they do not become negative evidence.</p></div>}
- {tab==="watch"&&<div className="drawer watch"><h3>Watch opportunities like this</h3><input value={email} onChange={e=>setEmail(e.target.value)} type="email"/><button onClick={watch}>Create 80%+ watch</button><small>Email remains preview-only until an email provider is configured.</small></div>}
- {notice&&<button className="toast" onClick={()=>setNotice("")}>{notice} ×</button>}</main>}
+import { useEffect, useMemo, useState } from "react";
+import { callTool, connectBridge, followUp, openLink, setBridgeListeners } from "./mcpBridge";
+import { applyFilters, DEFAULT_FILTERS, type Filters, type ViewId } from "./grantView";
+import type { SearchOutput } from "./types";
+import GrantPilotMark from "./GrantPilotMark";
+import { ControlBar } from "./components/ControlBar";
+import { Visualization } from "./components/Visualizations";
+import { SelectedPanel } from "./components/SelectedPanel";
+import { RankedStrip } from "./components/RankedStrip";
+import { ComparisonTray } from "./components/ComparisonTray";
+
+export default function App() {
+  const [data, setData] = useState<SearchOutput | null>(null);
+  const [selectedId, setSelectedId] = useState("");
+  const [view, setView] = useState<ViewId>(() => (globalThis as any).__GRANTPILOT_PREVIEW_VIEW__ ?? "matrix");
+  const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS);
+  const [comparison, setComparison] = useState<Set<string>>(new Set());
+  const [comparisonOpen, setComparisonOpen] = useState(false);
+  const [notice, setNotice] = useState("");
+  const [loadingMore, setLoadingMore] = useState(false);
+
+  useEffect(() => {
+    setBridgeListeners(
+      (next) => {
+        setData((current) => {
+          if (!next.append || !current) return next;
+          const grants = [...current.grants, ...next.grants].filter(
+            (item, index, all) => all.findIndex((candidate) => candidate.opportunity.id === item.opportunity.id) === index,
+          );
+          return {
+            ...current,
+            ...next,
+            append: false,
+            resultCount: grants.length,
+            totalResultCount: next.totalResultCount ?? current.totalResultCount,
+            sourceCounts: {
+              "grants-gov": grants.filter((item) => item.opportunity.source === "grants-gov").length,
+              "irs-990pf": grants.filter((item) => item.opportunity.source === "irs-990pf").length,
+            },
+            grants,
+            warnings: [...new Set([...current.warnings, ...next.warnings])],
+          };
+        });
+        setSelectedId((current) => current || next.grants.reduce((best, grant) => !best || grant.score.overallScore > best.score.overallScore ? grant : best, next.grants[0])?.opportunity.id || "");
+      },
+      setNotice,
+    );
+    connectBridge();
+  }, []);
+
+  const filtered = useMemo(() => data ? applyFilters(data.grants, filters) : [], [data, filters]);
+  const selected = filtered.find((grant) => grant.opportunity.id === selectedId) ?? filtered[0] ?? data?.grants[0];
+  const compared = data?.grants.filter((grant) => comparison.has(grant.opportunity.id)) ?? [];
+  const remaining = Math.max(0, (data?.totalResultCount ?? 0) - (data?.grants.length ?? 0));
+
+  function toggleComparison(id: string) {
+    setComparison((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else if (next.size < 3) next.add(id);
+      else {
+        setNotice("Compare up to three opportunities at a time.");
+        return current;
+      }
+      if (next.size < 2) setComparisonOpen(false);
+      return next;
+    });
+  }
+
+  async function showComparison() {
+    if (comparison.size < 2) return;
+    setComparisonOpen(true);
+    try {
+      await callTool("compare_grants", { grantIds: [...comparison] });
+      setNotice("Comparison evidence refreshed from GrantPilot.");
+    } catch (error) {
+      setNotice(error instanceof Error ? `${error.message} Showing the loaded comparison.` : "Showing the loaded comparison.");
+    }
+  }
+
+  async function loadMore() {
+    if (!data?.hasMore || loadingMore) return;
+    setLoadingMore(true);
+    setNotice("Loading the next cached page…");
+    try {
+      await callTool("load_more_grants", { queryId: data.queryId, offset: data.nextOffset ?? data.grants.length });
+      setNotice("More grants were added without rescanning providers.");
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Unable to load more grants.");
+    } finally {
+      setLoadingMore(false);
+    }
+  }
+
+  async function createWatch(email: string) {
+    if (!data || !selected) return;
+    try {
+      const result = await callTool("create_grant_watch", {
+        queryId: data.queryId,
+        email,
+        minimumScore: 80,
+        notificationTypes: ["new-match", "opportunity-amended", "opportunity-closing"],
+        selectedGrantId: selected.opportunity.id,
+      });
+      const output = result as { id?: string; emailPreview?: { deliveryStatus?: string } };
+      setNotice(`Watch ${output.id ?? "created"} · email ${output.emailPreview?.deliveryStatus ?? "queued"}.`);
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Unable to create the watch.");
+      throw error;
+    }
+  }
+
+  if (!data || !selected) {
+    return (
+      <main className="loading">
+        <GrantPilotMark />
+        <h2>Opening GrantPilot</h2>
+        <p>Preparing your grant opportunity workbench…</p>
+        {notice && <span>{notice}</span>}
+      </main>
+    );
+  }
+
+  return (
+    <main className="app-shell">
+      <ControlBar data={data} view={view} onViewChange={setView} filters={filters} onFiltersChange={setFilters} />
+      <div className="context-bar">
+        <div>
+          <span>Search context</span>
+          <strong>{data.context?.organizationName ?? "Nonprofit applicant"}{data.context?.organizationLocation ? ` · ${data.context.organizationLocation}` : ""}</strong>
+          <p>{data.context?.projectSummary ?? "Ranked using mission, eligibility, geography, award size, history, and deadline evidence."}</p>
+        </div>
+        <div className="context-status"><i />{data.searchedAt ? `Indexed ${new Date(data.searchedAt).toLocaleDateString()}` : "Indexed evidence"}<small>Verify at source</small></div>
+      </div>
+      <div className="workspace">
+        <Visualization view={view} grants={filtered} selectedId={selected.opportunity.id} onSelect={setSelectedId} context={data.context} />
+        <SelectedPanel
+          grant={selected}
+          inComparison={comparison.has(selected.opportunity.id)}
+          onToggleComparison={() => toggleComparison(selected.opportunity.id)}
+          onOpenSource={() => openLink(selected.opportunity.applicationUrl ?? selected.opportunity.sourceUrl).catch((error) => setNotice(error.message))}
+          onAskCopilot={() => followUp(`Explain the largest eligibility risks and next verification steps for ${selected.opportunity.title}. Use only the GrantPilot evidence returned for this grant.`).catch((error) => setNotice(error.message))}
+          onCreateWatch={createWatch}
+        />
+      </div>
+      {comparison.size > 0 && (
+        <div className="compare-dock">
+          <span><b>{comparison.size}</b> selected for comparison</span>
+          <button disabled={comparison.size < 2} onClick={showComparison}>Compare side by side</button>
+          <button onClick={() => { setComparison(new Set()); setComparisonOpen(false); }}>Clear</button>
+        </div>
+      )}
+      {comparisonOpen && <ComparisonTray grants={compared} onClose={() => setComparisonOpen(false)} />}
+      <RankedStrip
+        grants={filtered}
+        selectedId={selected.opportunity.id}
+        onSelect={setSelectedId}
+        comparison={comparison}
+        onToggleComparison={toggleComparison}
+        hasMore={Boolean(data.hasMore)}
+        remaining={remaining}
+        onLoadMore={loadMore}
+        loadingMore={loadingMore}
+      />
+      <footer>
+        <span>GrantPilot ranks evidence; it does not guarantee eligibility or funding.</span>
+        <span>{data.warnings[0] ?? "Application requirements must be verified at the original source."}</span>
+      </footer>
+      {notice && <button className="toast" onClick={() => setNotice("")}>{notice}<span>×</span></button>}
+    </main>
+  );
+}

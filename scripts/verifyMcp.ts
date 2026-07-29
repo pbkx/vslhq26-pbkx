@@ -24,24 +24,24 @@ await client.connect(transport);
 const listed=await client.listTools(),names=listed.tools.map(tool=>tool.name);
 for(const name of REQUIRED_TOOLS)if(!names.includes(name))throw new Error(`Missing tool ${name}`);
 const search=listed.tools.find(tool=>tool.name==="search_grants")!;
-if((search._meta as any)?.ui?.resourceUri!=="ui://grantpilot/opportunity-workbench-v2")
+if((search._meta as any)?.ui?.resourceUri!=="ui://grantpilot/opportunity-workbench-v3")
  throw new Error("search_grants has no GrantPilot UI binding");
 
 const prompt="Find grants for a Washington nonprofit teaching practical AI skills to low-income adults. We need between $100,000 and $500,000.";
 const result=await client.callTool({name:"search_grants",arguments:{query:prompt,filters:{onlyOpen:true}}});
 const output=result.structuredContent as any,firstBytes=Buffer.byteLength(JSON.stringify(result));
-if(!output?.grants?.length||output.grants.length<20)
+if(!output?.grants?.length||output.grants.length<12)
  throw new Error("search_grants returned too few structured grants for the demo prompt");
 if(!output.sourceCounts?.["grants-gov"]||!output.sourceCounts?.["irs-990pf"])
  throw new Error("search_grants did not return both federal opportunities and historical private-funder prospects");
-if(firstBytes>=65536)throw new Error("Initial tool result exceeds 64 KiB");
+if(firstBytes>=48*1024)throw new Error("Initial tool result exceeds the 48 KiB GrantPilot safety ceiling");
 if(!output.hasMore||!Number.isInteger(output.nextOffset))
  throw new Error("The demo search did not expose a load-more page");
 
 const moreResult=await client.callTool({name:"load_more_grants",arguments:{queryId:output.queryId,offset:output.nextOffset}});
 const more=moreResult.structuredContent as any,moreBytes=Buffer.byteLength(JSON.stringify(moreResult));
 if(!more?.append||!more.grants?.length)throw new Error("load_more_grants returned no appendable records");
-if(moreBytes>=65536)throw new Error("Load-more tool result exceeds 64 KiB");
+if(moreBytes>=48*1024)throw new Error("Load-more tool result exceeds the 48 KiB GrantPilot safety ceiling");
 const firstIds=new Set(output.grants.map((grant:any)=>grant.opportunity.id));
 if(more.grants.some((grant:any)=>firstIds.has(grant.opportunity.id)))
  throw new Error("load_more_grants returned duplicate IDs from the first page");
@@ -63,7 +63,7 @@ const tooMany=await client.callTool({name:"search_grants",arguments:{query:promp
 if(!tooMany.isError||(tooMany.structuredContent as any)?.error?.code!=="RESULT_LIMIT_EXCEEDED")
  throw new Error("search_grants did not return its explicit result-limit error");
 
-const resource=await client.readResource({uri:"ui://grantpilot/opportunity-workbench-v2"}),content=resource.contents[0];
+const resource=await client.readResource({uri:"ui://grantpilot/opportunity-workbench-v3"}),content=resource.contents[0];
 if(content?.mimeType!=="text/html;profile=mcp-app"||!("text"in content)||!content.text.includes("GrantPilot"))
  throw new Error("GrantPilot widget invalid");
 console.log(

@@ -33,7 +33,39 @@ const clamp=(n:number)=>Math.max(0,Math.min(100,n));
 const component=(score:number,weight:number,confidence:number,reasons:string[],evidence:ScoreEvidence[],missingData:string[]):ScoreComponent=>({score:clamp(score),weight,weightedContribution:clamp(score)*weight,confidence,reasons,evidence,missingData});
 export function validateWeights(weights:MatchWeights){const sum=Object.values(weights).reduce((a,b)=>a+b,0);if(Math.abs(sum-1)>.001)throw new Error(`Scoring weights must total 1.0; received ${sum.toFixed(3)}.`)}
 export function daysUntil(deadline?:string){return deadline?Math.ceil((Date.parse(deadline)-Date.now())/86400000):undefined}
-export function applicationEffort(grant:GrantOpportunity,org:OrganizationProfile){let value=20;if(grant.requiresCostShare)value+=15;if(grant.requirements.some(r=>r.category==="partnership"))value+=15;if(grant.requirements.some(r=>r.category==="registration")&&org.registrations?.samGov!=="active")value+=10;if(grant.requirements.some(r=>r.text.toLowerCase().includes("two-stage")))value+=10;value+=Math.min(20,grant.requirements.filter(r=>r.category==="program").length*5);value+=Math.min(15,grant.requirements.filter(r=>r.category==="document").length*3);if((daysUntil(grant.deadline)??1000)<30)value+=10;return clamp(value)}
+export function applicationEffort(grant:GrantOpportunity,org:OrganizationProfile,historical?:HistoricalEvidence){
+ const privateProspect=grant.recordCategory==="private-funder-prospect";
+ let value=privateProspect?38:18;
+ const knownAward=grant.awardMax??grant.awardMin;
+ if(knownAward!==undefined)value+=knownAward>=5_000_000?14:knownAward>=1_000_000?10:knownAward>=500_000?7:knownAward>=250_000?4:knownAward>=100_000?2:0;
+ if(grant.awardMin!==undefined&&grant.awardMax!==undefined&&grant.awardMin>0&&grant.awardMax/grant.awardMin>=8)value+=5;
+ if((grant.awardMin===undefined)!==(grant.awardMax===undefined))value+=4;
+ if(privateProspect){
+  const historyConfidence=historical?.confidence??0;
+  value+=historyConfidence<35?20:historyConfidence<60?13:historyConfidence<80?7:3;
+  if(grant.awardMin===undefined&&grant.awardMax===undefined)value+=9;
+  else if(grant.awardMin===undefined||grant.awardMax===undefined)value+=4;
+  else if(grant.awardMin===grant.awardMax)value+=6;
+  if(!grant.eligibleLocations.length)value+=7;
+  if(grant.missionTopics.length<3)value+=5;
+  if(grant.missionTopics.length>8)value+=4;
+ }else{
+  if(grant.recordCategory==="forecasted-federal-opportunity")value+=8;
+  if(!grant.deadline)value+=8;
+  if(!grant.requirements.length)value+=10;
+  if(grant.expectedAwardCount!==undefined&&grant.expectedAwardCount<=3)value+=4;
+ }
+ if(grant.requiresCostShare)value+=15;
+ if(grant.requirements.some(r=>r.category==="partnership"))value+=15;
+ if(grant.requirements.some(r=>r.category==="registration")&&org.registrations?.samGov!=="active")value+=10;
+ if(grant.requirements.some(r=>r.text.toLowerCase().includes("two-stage")))value+=10;
+ value+=Math.min(20,grant.requirements.filter(r=>r.category==="program").length*5);
+ value+=Math.min(15,grant.requirements.filter(r=>r.category==="document").length*3);
+ if((daysUntil(grant.deadline)??1000)<30)value+=10;
+ if(org.applicationCapacity==="low")value+=8;
+ if(org.applicationCapacity==="high")value-=5;
+ return clamp(value)
+}
 const deadlineScore=(days:number|undefined,capacity= "medium")=>{if(days===undefined)return 60;if(days<=0)return 0;const table=capacity==="low"?[[90,100],[61,85],[31,55],[15,20],[1,5]]:capacity==="high"?[[90,100],[61,100],[31,95],[15,80],[1,50]]:[[90,100],[61,95],[31,80],[15,50],[1,20]];return table.find(([minimum])=>days>=minimum)?.[1]??0};
 export function scoreGrant(grant:GrantOpportunity,org:OrganizationProfile,project:ProjectProfile,historical:HistoricalEvidence,weights:MatchWeights=DEFAULT_WEIGHTS):GrantResult{
  validateWeights(weights);const privateProspect=grant.recordCategory==="private-funder-prospect";const evidence=(source:ScoreEvidence["source"],field:string,value:ScoreEvidence["value"]):ScoreEvidence=>({source,field,value,sourceUrl:source==="opportunity"?grant.sourceUrl:undefined});
@@ -75,5 +107,5 @@ export function scoreGrant(grant:GrantOpportunity,org:OrganizationProfile,projec
  const overallScore=Object.values(components).reduce((sum,c)=>sum+c.weightedContribution,0);const hardExclusions=explicitlyExcluded?["The opportunity explicitly limits applicants to a different organization type."]:!privateProspect&&geoScore===0?["Project geography appears outside the stated eligible area."]:[];
  const confidence=Math.round(Object.values(components).reduce((s,c)=>s+c.confidence,0)/6);const status=privateProspect?"needs-verification":hardExclusions.length?"likely-ineligible":applicantScore===100&&geoScore>=90&&confidence>=85?"confirmed":overallScore>=75?"likely":overallScore>=60?"possible":confidence<60?"needs-verification":"possible";
  const warnings=[...(privateProspect?[grant.sourceDisclaimer]:[]),...(grant.requiresCostShare&&org.canProvideCostShare===false?["Cost share is required, but the organization indicated it cannot provide matching funds."]:[]),...(budget&&org.annualBudget&&budget>org.annualBudget*.5?["Requested award exceeds 50% of annual budget; verify administrative capacity."]:[])];
- return{opportunity:grant,score:{grantId:grant.id,overallScore:Math.round(overallScore),components,eligibilityStatus:status,hardExclusions,warnings,scoredAt:new Date().toISOString()},chart:{applicationEffort:applicationEffort(grant,org),matchScore:Math.round(overallScore),awardAmount:max??min,daysRemaining:days}};
+ return{opportunity:grant,score:{grantId:grant.id,overallScore:Math.round(overallScore),components,eligibilityStatus:status,hardExclusions,warnings,scoredAt:new Date().toISOString()},chart:{applicationEffort:applicationEffort(grant,org,historical),matchScore:Math.round(overallScore),awardAmount:max??min,daysRemaining:days}};
 }

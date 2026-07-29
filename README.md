@@ -89,14 +89,34 @@ Keep the existing tunnel running in a second terminal:
 devtunnel host camppilot
 ```
 
-Verify MCP and build the uploadable agent package:
+Verify MCP:
 
 ```bash
 npm run verify:mcp
+```
+
+In Microsoft 365 Agents Toolkit, run **Lifecycle → Provision** before creating
+the manual ZIP. Provision writes the environment-specific `TEAMS_APP_ID`, then:
+
+```bash
 npm run package:agent
 ```
 
-The generated package is `dist/grantpilot-agent-mcp.zip`.
+The generated package is `dist/grantpilot-agent-mcp.zip`. The packaging script
+intentionally refuses to reuse the retired CampPilot ID when `TEAMS_APP_ID` is
+unset.
+
+### Microsoft app icon refresh
+
+The development environment intentionally leaves `TEAMS_APP_ID`,
+`M365_TITLE_ID`, and `M365_APP_ID` unset once so the next **Lifecycle →
+Provision** creates a fresh GrantPilot catalog identity. This avoids Microsoft
+365 continuing to show the cached CampPilot mountain icon after the product
+rename. The new package uses `grantpilot-color-v2.png` and
+`grantpilot-outline-v2.png`; after Provision, select the new **GrantPilot-v2**
+app/agent and remove the retired GrantPilot/CampPilot installation. If the
+Microsoft 365 client still shows old metadata, sign out and back in before
+testing the new agent.
 
 ### Configuration
 

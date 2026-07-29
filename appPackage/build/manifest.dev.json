@@ -1,8 +1,8 @@
 {
     "$schema": "https://developer.microsoft.com/json-schemas/teams/v1.24/MicrosoftTeams.schema.json",
     "manifestVersion": "1.24",
-    "version": "2.0.4",
-    "id": "f6969731-ee41-4fc4-9e3a-bc6e7524a139",
+    "version": "2.1.0",
+    "id": "fecb4619-902a-4848-a9ae-722a5a8fd279",
     "developer": {
         "name": "GrantPilot",
         "websiteUrl": "https://rqt1l69t-3000.usw2.devtunnels.ms",
@@ -18,10 +18,10 @@
         "full": "GrantPilot combines current Grants.gov opportunities, historical IRS 990-PF and USAspending signals, transparent deterministic scoring, comparisons, and proactive watches."
     },
     "icons": {
-        "outline": "outline.png",
-        "color": "color.png"
+        "outline": "grantpilot-outline-v2.png",
+        "color": "grantpilot-color-v2.png"
     },
-    "accentColor": "#405FD0",
+    "accentColor": "#000000",
     "validDomains": [
         "localhost",
         "127.0.0.1",

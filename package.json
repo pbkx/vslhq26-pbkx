@@ -13,6 +13,7 @@
     "test": "vitest run --exclude 'dist/**'",
     "verify:mcp": "tsx scripts/verifyMcp.ts",
     "package:agent": "tsx scripts/packageAgent.ts",
+    "preview:widget": "tsx scripts/buildWidgetPreview.ts",
     "data:ingest:grants": "tsx scripts/ingestGrantsGov.ts",
     "data:ingest:irs": "tsx scripts/ingestIrs990Pf.ts",
     "data:refresh:usaspending": "tsx scripts/refreshUsaspending.ts",
