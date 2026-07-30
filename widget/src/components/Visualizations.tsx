@@ -96,7 +96,7 @@ function MatchMatrix({ grants, selectedId, onSelect }: Omit<Props, "view" | "con
     <section className="visual-card original-visual matrix-visual">
       <ChartHeader
         title="Match Matrix"
-        subtitle={`Axes fit filtered results · match ${scoreDomain.minimum}–${scoreDomain.maximum} · effort ${effortDomain.minimum}–${effortDomain.maximum} · bubble size = award amount`}
+        subtitle="Match score vs. application effort · bubble size = award"
       >
         <div className="legend original-legend">
           <span><i className="federal" />Grants.gov</span>
@@ -160,7 +160,7 @@ const AWARD_SORT_OPTIONS = [
 ];
 
 function AwardFit({ grants, selectedId, onSelect, context }: Omit<Props, "view">) {
-  const [sort, setSort] = useState<AwardSort>("score");
+  const [sort, setSort] = useState<AwardSort>("award");
   const rows = useMemo(() => {
     const copy = [...grants];
     if (sort === "score") copy.sort((a, b) => b.score.overallScore - a.score.overallScore);
@@ -313,6 +313,12 @@ function ScoreHeatmap({ grants, selectedId, onSelect }: Omit<Props, "view" | "co
       </ChartHeader>
       <div className="original-heatmap-shell">
         <table className="original-heatmap">
+          <colgroup>
+            <col className="heatmap-name-column" />
+            {columns.map((column) => (
+              <col className="heatmap-score-column" key={column.key} />
+            ))}
+          </colgroup>
           <thead>
             <tr>
               <th className="sticky-name">Opportunity</th>
@@ -390,6 +396,7 @@ function markerTone(score: number) {
 }
 
 function Deadlines({ grants, selectedId, onSelect }: Omit<Props, "view" | "context">) {
+  const [hoverId, setHoverId] = useState<string | null>(null);
   const datedFederal = grants
     .filter((grant) => grant.opportunity.source === "grants-gov" && grant.opportunity.deadline)
     .map((grant) => ({ grant, days: grant.chart.daysRemaining ?? 0 }))
@@ -399,6 +406,7 @@ function Deadlines({ grants, selectedId, onSelect }: Omit<Props, "view" | "conte
   const deadlineX = (days: number) => 4 + (days / horizon) * 92;
   const deadlineTicks = Array.from({ length: 7 }, (_, index) => horizon * index / 6);
   const historical = grants.filter((grant) => grant.opportunity.source === "irs-990pf");
+  const hovered = federal.find(({ grant }) => grant.opportunity.id === hoverId);
 
   return (
     <section className="visual-card original-visual deadlines-visual content-fit-visual">
@@ -428,10 +436,19 @@ function Deadlines({ grants, selectedId, onSelect }: Omit<Props, "view" | "conte
                 className={`deadline-marker ${grant.opportunity.id === selectedId ? "selected" : ""}`}
                 style={{ left: `${deadlineX(days)}%`, width: size, height: size, background: markerTone(grant.score.overallScore) }}
                 onClick={() => onSelect(grant.opportunity.id)}
+                onMouseEnter={() => setHoverId(grant.opportunity.id)}
+                onMouseLeave={() => setHoverId((current) =>
+                  current === grant.opportunity.id ? null : current)}
                 aria-label={`${grant.opportunity.title}, due in ${days} days`}
               />
             );
           })}
+          {hovered && (
+            <GrantHoverCard
+              grant={hovered.grant}
+              point={{ x: deadlineX(hovered.days), y: 50 }}
+            />
+          )}
           {federal.length === 0 && <span className="timeline-empty">No dated federal opportunities within the next 12 months.</span>}
         </div>
         <div className="historical-heading">

@@ -301,6 +301,8 @@ export async function runGrantWatchChecks(options: WatchRunnerOptions = {}) {
       frequency,
       scope,
       minimumScore,
+      unsubscribeToken: storedWatch.unsubscribeToken
+        ?? randomUUID().replaceAll("-", ""),
       deadlineLeadDays: storedWatch.deadlineLeadDays ?? 14,
       notificationTypes: storedWatch.notificationTypes?.length
         ? storedWatch.notificationTypes
@@ -443,8 +445,8 @@ export async function runGrantWatchChecks(options: WatchRunnerOptions = {}) {
       ...normalizedWatch,
       nextCheckAt: nextWatchCheck(frequency, now),
       lastCheckedAt: checkedAt,
-      // Preview-only and failed sends intentionally keep the previous source
-      // baseline. The same change remains detectable after credentials recover.
+      // Failed sends intentionally keep the previous source baseline. The same
+      // change remains detectable after email delivery recovers.
       lastSeenGrantState: allDelivered ? refreshedState : previousState,
       lastNotifiedGrantIds: [...previouslyNotified],
       lastNotifiedEventKeys: [...notifiedEvents],

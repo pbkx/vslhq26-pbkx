@@ -17,6 +17,7 @@ import {
   SCORE_LABELS,
   sourceLabel,
 } from "../grantView";
+import { SelectControl } from "./SelectControl";
 
 function ScoreRing({ value }: { value: number }) {
   const circumference = 2 * Math.PI * 25;
@@ -120,6 +121,23 @@ const WATCH_QUALITY_OPTIONS: Array<{ id: WatchMatchQuality; label: string }> = [
   { id: "worth-reviewing", label: "Worth reviewing or better" },
   { id: "strong", label: "Strong matches only" },
   { id: "top-only", label: "Top matches only" },
+];
+
+const WATCH_FREQUENCY_OPTIONS = [
+  { value: "as-detected", label: "As detected" },
+  { value: "daily", label: "Daily digest" },
+  { value: "weekly", label: "Weekly digest" },
+];
+
+const WATCH_SCOPE_OPTIONS = [
+  { value: "search", label: "This search" },
+  { value: "selected-grant", label: "This grant only" },
+];
+
+const WATCH_DEADLINE_OPTIONS = [
+  { value: "7", label: "7 days before" },
+  { value: "14", label: "14 days before" },
+  { value: "30", label: "30 days before" },
 ];
 
 const WATCH_NOTIFICATION_OPTIONS: Array<{
@@ -328,38 +346,44 @@ export function SelectedPanel({
             </label>
             <label>
               Frequency
-              <select value={frequency} onChange={(event) => setFrequency(event.target.value as WatchFrequency)}>
-                <option value="as-detected">As detected</option>
-                <option value="daily">Daily digest</option>
-                <option value="weekly">Weekly digest</option>
-              </select>
+              <SelectControl
+                value={frequency}
+                options={WATCH_FREQUENCY_OPTIONS}
+                onValueChange={(value) => setFrequency(value as WatchFrequency)}
+                ariaLabel="Watch frequency"
+                className="watch-select"
+              />
             </label>
             <label>
               Watch
-              <select value={scope} onChange={(event) => setScope(event.target.value as WatchScope)}>
-                <option value="search">This search</option>
-                <option value="selected-grant">This grant only</option>
-              </select>
+              <SelectControl
+                value={scope}
+                options={WATCH_SCOPE_OPTIONS}
+                onValueChange={(value) => setScope(value as WatchScope)}
+                ariaLabel="Watch scope"
+                className="watch-select"
+              />
             </label>
             <label>
               Match threshold
-              <select value={matchQuality} onChange={(event) => setMatchQuality(event.target.value as WatchMatchQuality)}>
-                {WATCH_QUALITY_OPTIONS.map((option) => (
-                  <option value={option.id} key={option.id}>{option.label}</option>
-                ))}
-              </select>
+              <SelectControl
+                value={matchQuality}
+                options={WATCH_QUALITY_OPTIONS.map((option) => ({ value: option.id, label: option.label }))}
+                onValueChange={(value) => setMatchQuality(value as WatchMatchQuality)}
+                ariaLabel="Match threshold"
+                className="watch-select"
+              />
             </label>
             <label className={!notificationTypes.includes("opportunity-closing") ? "watch-field-disabled" : ""}>
               Deadline reminder
-              <select
+              <SelectControl
                 disabled={!notificationTypes.includes("opportunity-closing")}
-                value={deadlineLeadDays}
-                onChange={(event) => setDeadlineLeadDays(Number(event.target.value))}
-              >
-                <option value={7}>7 days before</option>
-                <option value={14}>14 days before</option>
-                <option value={30}>30 days before</option>
-              </select>
+                value={String(deadlineLeadDays)}
+                options={WATCH_DEADLINE_OPTIONS}
+                onValueChange={(value) => setDeadlineLeadDays(Number(value))}
+                ariaLabel="Deadline reminder"
+                className="watch-select"
+              />
             </label>
           </div>
 

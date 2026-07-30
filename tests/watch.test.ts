@@ -13,6 +13,7 @@ const watch: GrantWatch = {
   id: "watch-test",
   queryId: "query-test",
   email: "grants@example.org",
+  unsubscribeToken: "unsubscribe-test-token",
   matchQuality: "worth-reviewing",
   minimumScore: WATCH_QUALITY["worth-reviewing"].minimumScore,
   frequency: "daily",
@@ -67,8 +68,18 @@ describe("grant watch preferences and email copy", () => {
     expect(confirmation.html).toContain("conversationId=watch-test");
     expect(confirmation.html).toContain("background:#10100f");
     expect(confirmation.html).toContain("background:#181817");
-    expect(confirmation.html).toContain("border:1px solid #30302e");
+    expect(confirmation.html).toContain('content="light dark"');
+    expect(confirmation.html).toContain("@media(prefers-color-scheme:dark)");
+    expect(confirmation.html).toContain("background:#f4f4f1");
+    expect(confirmation.html).toContain('src="cid:grantpilot-logo"');
+    expect(confirmation.html).toContain("border:1px solid #deded8");
+    expect(confirmation.html).toContain("border-color:#30302e!important");
     expect(confirmation.html).not.toContain("background:#ecece7");
+    expect(confirmation.html).toContain('class="email-container" width="600"');
+    expect(confirmation.html).toContain('align="center" style="width:600px;max-width:600px;margin:0 auto');
+    expect(confirmation.html).toContain("Manage or cancel updates");
+    expect(confirmation.html).toContain("unsubscribe-test-token");
+    expect(confirmation.unsubscribeUrl).toContain("/watches/unsubscribe");
 
     const alert = buildWatchAlertEmail(watch, grant, {
       notificationType: "new-match",
@@ -78,6 +89,8 @@ describe("grant watch preferences and email copy", () => {
     expect(alert.plainText).not.toContain("% match");
     expect(alert.html).toContain("Open in Copilot");
     expect(alert.html).toContain("View official source");
+    expect(alert.html).toContain("Manage or cancel updates");
+    expect(alert.unsubscribeUrl).toContain("unsubscribe-test-token");
   });
 
   it("uses notification-specific subjects and copy", () => {

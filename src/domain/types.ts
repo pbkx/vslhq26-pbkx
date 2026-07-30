@@ -44,6 +44,7 @@ export type GrantWatch={
  queryId:string;
  email:string;
  ownerKey?:string;
+ unsubscribeToken?:string;
  matchQuality:GrantWatchMatchQuality;
  minimumScore:number;
  frequency:GrantWatchFrequency;

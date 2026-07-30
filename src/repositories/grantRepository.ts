@@ -86,6 +86,23 @@ export class GrantRepository {
     return removed;
   }
 
+  getWatchForUnsubscribe(id: string, token: string) {
+    const watch = this.watches.get(id);
+    if (!watch?.unsubscribeToken || !token) return undefined;
+    return watch.unsubscribeToken === token ? watch : undefined;
+  }
+
+  async cancelWatchByToken(id: string, token: string) {
+    const watch = this.getWatchForUnsubscribe(id, token);
+    if (!watch) return undefined;
+    const cancelled = {
+      ...watch,
+      status: "paused" as const,
+    };
+    await this.saveWatch(cancelled);
+    return cancelled;
+  }
+
   private watchLeasePath() {
     return `${this.path}.watch-run.lock`;
   }

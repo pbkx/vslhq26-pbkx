@@ -153,16 +153,24 @@ ADMIN_WATCH_TOKEN=
 WATCH_POLL_INTERVAL_MS=900000
 ```
 
-With Azure Communication Services credentials missing, email actions return a clearly labeled `preview-only` result.
+Email delivery is production-gated: GrantPilot activates a watch only after
+Azure Communication Services confirms that its confirmation email was sent.
+If the connection string or verified sender is absent or invalid, delivery
+fails closed and the watch remains inactive.
 
 Grant watches use plain-language sensitivity instead of requiring users to
 interpret a percentage: **Worth reviewing** (recommended), **Strong matches**,
 or **Top matches only**. A user can also choose the watched scope, alert
 reasons, deadline reminder window, and delivery cadence while keeping the
 single **Create watch** action. Confirmation and alert messages are responsive
-HTML emails styled to match the black-and-charcoal GrantPilot workbench. Every
-alert uses event-specific content and includes **Open in Copilot** plus the
-original evidence/source link. When the MCP host exposes the current
+HTML emails styled to match the GrantPilot workbench, with native light/dark
+mode and an inline CID logo supplied by Azure Communication Services. Every
+alert uses event-specific content and includes **Open in Copilot**, the
+original evidence/source link, and a signed bearer link to **Manage or cancel
+updates**. The management link opens a confirmation page before pausing that
+specific watch; standards-compatible email clients also receive
+`List-Unsubscribe` headers. `PUBLIC_ORIGIN` must be the reachable HTTPS server
+origin so those links return to GrantPilot. When the MCP host exposes the current
 conversation URL, GrantPilot preserves it with the watch; otherwise
 `M365_COPILOT_RETURN_URL` provides the safe Copilot fallback. The watch checker
 suppresses duplicate notifications for the same unchanged event. Each due
@@ -176,12 +184,12 @@ broad-search watches also report candidates that stop matching the saved
 criteria. Watch sensitivity replaces—not compounds—the minimum score from the
 original search. Daily and
 weekly watches combine all detected changes into one digest; **As detected**
-sends individual alerts. Preview-only or failed deliveries are not marked as
-notified, so they remain eligible for delivery after email credentials recover.
-Watch creation first persists a pending record. It becomes active only when
-the confirmation send succeeds or returns the explicit local `preview-only`
-status; a provider failure leaves a visible, inactive `confirmation-failed`
-record, and retries reuse it instead of creating duplicates.
+sends individual alerts. Failed deliveries are not marked as notified, so they
+remain eligible for delivery after email configuration recovers. Watch creation
+first persists a pending record. It becomes active only when Azure confirms the
+confirmation send; a provider failure leaves a visible, inactive
+`confirmation-failed` record, and retries reuse it instead of creating
+duplicates.
 While the server is running, a lightweight background poll checks which
 watches are due; each watch still honors its own cadence. Timer and admin runs
 share an atomic filesystem lease, so processes using the same state volume
@@ -213,7 +221,7 @@ Expected behavior:
 6. Selecting a grant silently hydrates its full evidence without a new chat message.
 7. Current federal opportunities are visibly separated from historical private-funder prospects.
 8. Rescoring reuses normalized records without repeating provider searches.
-9. Open **Create watch**, choose match sensitivity, alert reasons, cadence, scope, and email destination, then create the watch. Email is preview-only until Azure Communication Services is configured.
+9. Open **Create watch**, choose match sensitivity, alert reasons, cadence, scope, and email destination, then create the watch. Azure Communication Services sends the confirmation and subsequent watch notifications.
 
 ## Data ingestion and refresh
 
@@ -303,7 +311,7 @@ Source roles are enforced:
 - IRS EO BMF identity validation requires its separate CSV extract and is not yet ingested.
 - Raw datasets and generated indexes must be recreated after cloning because they cannot reasonably be stored in Git.
 - The Microsoft Dev Tunnel URL works only while the local server and tunnel host are running.
-- Azure Communication Services Email remains preview-only until credentials and a verified sender are supplied.
+- Azure Communication Services Email requires a valid connection string and verified sender supplied through environment variables; GrantPilot never commits or exposes those values.
 - Session ownership is the strongest identity available in the no-auth demo. Configure MCP OAuth to manage the same watches across separate Copilot conversations.
 - The filesystem watch-run lease coordinates processes that share one state volume. A horizontally scaled deployment with separate filesystems should replace it with a database/distributed lease.
 - The demo video has not yet been recorded.

@@ -257,7 +257,7 @@ describe("grant watch refresh and delivery", () => {
     ]);
   });
 
-  it("does not consume events or advance the source baseline in preview-only mode", async () => {
+  it("does not consume events or advance the source baseline when delivery fails", async () => {
     const initial = search([grant({ id: "existing" })]);
     const refreshed = search([
       grant({ id: "existing" }),
@@ -265,16 +265,16 @@ describe("grant watch refresh and delivery", () => {
     ]);
     const originalState = buildWatchGrantState(initial);
     const repository = new FakeRepository(initial, watch(initial));
-    const previewMailer = new FakeMailer("preview-only");
+    const failedMailer = new FakeMailer("failed");
 
     await runGrantWatchChecks({
       repository,
-      mailer: previewMailer,
+      mailer: failedMailer,
       now: () => now,
       refreshSearch: async () => refreshed,
     });
 
-    expect(previewMailer.messages).toHaveLength(1);
+    expect(failedMailer.messages).toHaveLength(1);
     expect(repository.currentWatch.lastNotifiedEventKeys).toEqual([]);
     expect(repository.currentWatch.lastNotifiedGrantIds).toEqual([]);
     expect(repository.currentWatch.lastSeenGrantState).toEqual(originalState);

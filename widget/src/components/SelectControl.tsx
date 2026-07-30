@@ -27,16 +27,22 @@ export function SelectControl({
   onValueChange,
   ariaLabel,
   className = "",
+  disabled = false,
 }: {
   value: string;
   options: SelectOption[];
   onValueChange: (value: string) => void;
   ariaLabel: string;
   className?: string;
+  disabled?: boolean;
 }) {
   return (
-    <SelectPrimitive.Root value={value} onValueChange={onValueChange}>
-      <SelectPrimitive.Trigger className={`select-trigger ${className}`} aria-label={ariaLabel}>
+    <SelectPrimitive.Root value={value} onValueChange={onValueChange} disabled={disabled}>
+      <SelectPrimitive.Trigger
+        className={`select-trigger ${className}`}
+        aria-label={ariaLabel}
+        disabled={disabled}
+      >
         <SelectPrimitive.Value />
         <SelectPrimitive.Icon asChild>
           <Chevron />

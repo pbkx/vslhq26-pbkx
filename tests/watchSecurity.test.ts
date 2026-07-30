@@ -17,6 +17,7 @@ const watch = (id: string, ownerKey: string): GrantWatch => ({
   ownerKey,
   queryId: "query",
   email: `${id}@example.org`,
+  unsubscribeToken: `token-${id}`,
   matchQuality: "worth-reviewing",
   minimumScore: 60,
   frequency: "daily",
@@ -52,6 +53,39 @@ describe("watch security", () => {
     expect(await repository.deleteWatch("watch-b", "owner-a")).toBe(false);
     expect(repository.getWatchForOwner("watch-b", "owner-b")?.id).toBe("watch-b");
     expect(await repository.deleteWatch("watch-b", "owner-b")).toBe(true);
+  });
+
+  it("requires the signed email token and pauses only the referenced watch", async () => {
+    const directory = await mkdtemp(resolve(tmpdir(), "grantpilot-unsubscribe-"));
+    const repository = new GrantRepository(resolve(directory, "state.json"));
+    await repository.saveWatch(watch("watch-email", "owner-email"));
+    const server = createHttpApp(repository).listen(0, "127.0.0.1");
+    await new Promise<void>((resolvePromise) => server.once("listening", resolvePromise));
+    try {
+      const address = server.address();
+      if (!address || typeof address === "string") throw new Error("No test listener.");
+      const base = `http://127.0.0.1:${address.port}/watches/unsubscribe?watchId=watch-email`;
+
+      const invalid = await fetch(`${base}&token=wrong`);
+      expect(invalid.status).toBe(404);
+      expect(repository.listWatches()[0]?.status).toBe("active");
+
+      const confirmation = await fetch(`${base}&token=token-watch-email`);
+      expect(confirmation.status).toBe(200);
+      expect(await confirmation.text()).toContain("Cancel these updates");
+      expect(repository.listWatches()[0]?.status).toBe("active");
+
+      const cancelled = await fetch(`${base}&token=token-watch-email`, {
+        method: "POST",
+        headers: { "content-type": "application/x-www-form-urlencoded" },
+        body: "List-Unsubscribe=One-Click",
+      });
+      expect(cancelled.status).toBe(200);
+      expect(await cancelled.text()).toContain("Updates cancelled");
+      expect(repository.listWatches()[0]?.status).toBe("paused");
+    } finally {
+      await new Promise<void>((resolvePromise) => server.close(() => resolvePromise()));
+    }
   });
 
   it("allows only one cross-process watch-run lease holder", async () => {
