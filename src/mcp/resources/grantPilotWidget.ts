@@ -1,6 +1,13 @@
 import{readFile}from"node:fs/promises";import{resolve}from"node:path";import type{McpServer}from"@modelcontextprotocol/sdk/server/mcp.js";import{registerAppResource,RESOURCE_MIME_TYPE}from"@modelcontextprotocol/ext-apps/server";
-export const GRANTPILOT_WIDGET_URI="ui://grantpilot/opportunity-workbench-v42";
+export const GRANTPILOT_WIDGET_URI="ui://grantpilot/opportunity-workbench-v49";
 export const GRANTPILOT_LEGACY_WIDGET_URIS=[
+ "ui://grantpilot/opportunity-workbench-v48",
+ "ui://grantpilot/opportunity-workbench-v47",
+ "ui://grantpilot/opportunity-workbench-v46",
+ "ui://grantpilot/opportunity-workbench-v45",
+ "ui://grantpilot/opportunity-workbench-v44",
+ "ui://grantpilot/opportunity-workbench-v43",
+ "ui://grantpilot/opportunity-workbench-v42",
  "ui://grantpilot/opportunity-workbench-v41",
  "ui://grantpilot/opportunity-workbench-v40",
  "ui://grantpilot/opportunity-workbench-v39",

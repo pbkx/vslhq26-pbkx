@@ -145,10 +145,10 @@ export default function App() {
       const output = result as {
         id?: string;
         settingsSummary?: string;
-        emailPreview?: { deliveryStatus?: string };
+        emailDelivery?: { status?: string };
       };
       setNotice(
-        `Watch created · ${output.settingsSummary ?? "preferences saved"} · email ${output.emailPreview?.deliveryStatus ?? "queued"}.`,
+        `Watch created · ${output.settingsSummary ?? "preferences saved"} · email ${output.emailDelivery?.status ?? "sent"}.`,
       );
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Unable to create the watch.");

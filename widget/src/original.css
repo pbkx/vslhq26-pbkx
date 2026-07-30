@@ -74,16 +74,23 @@ button:focus-visible, select:focus-visible, input:focus-visible { box-shadow: 0 
 }
 .mark svg { width: 22px; height: 22px; fill: #fff; }
 
-.app-shell { width: 100%; max-width: 1500px; margin: 0 auto; background: var(--background); min-height: 100vh; }
+.app-shell {
+  width: 100%;
+  max-width: 1500px;
+  margin: 0 auto;
+  background: var(--background);
+  min-height: 100vh;
+}
 
 .control-bar {
   position: sticky;
   top: 0;
-  z-index: 25;
+  z-index: 100;
+  isolation: isolate;
   padding: 9px 22px 10px;
   border-bottom: 1px solid var(--border);
-  background: color-mix(in srgb, var(--background) 94%, transparent);
-  backdrop-filter: blur(16px);
+  background: var(--background);
+  box-shadow: 0 1px 0 var(--border);
 }
 .control-top { display: flex; align-items: center; justify-content: space-between; gap: 14px; min-width: 0; }
 .view-tabs {
@@ -242,7 +249,14 @@ button:focus-visible, select:focus-visible, input:focus-visible { box-shadow: 0 
 }
 .reset-button:disabled { opacity: 0.35; cursor: default; }
 
-.workspace { padding: 14px 18px 0; display: grid; grid-template-columns: 1fr; gap: 14px; align-items: start; }
+.workspace {
+  isolation: isolate;
+  padding: 14px 18px 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 14px;
+  align-items: start;
+}
 .visual-card, .selected-panel, .ranked-strip {
   border: 1px solid var(--border);
   border-radius: 14px;
@@ -319,7 +333,7 @@ button:focus-visible, select:focus-visible, input:focus-visible { box-shadow: 0 
 .heat-scale i:nth-of-type(4) { background: var(--positive); }
 .heatmap-scroll { max-height: 405px; overflow: auto; border: 1px solid var(--border); border-radius: 11px; }
 .heatmap { width: 100%; min-width: 610px; border-collapse: separate; border-spacing: 0; font-size: 9px; }
-.heatmap thead { position: sticky; top: 0; z-index: 5; }
+.heatmap thead { position: static; }
 .heatmap th, .heatmap td { padding: 5px; border-bottom: 1px solid var(--border); text-align: center; }
 .heatmap thead th { height: 30px; background: var(--surface); color: var(--muted); font-size: 8px; font-weight: 650; text-transform: uppercase; letter-spacing: 0.03em; }
 .heatmap thead th:first-child { text-align: left; min-width: 190px; }
@@ -374,10 +388,9 @@ button:focus-visible, select:focus-visible, input:focus-visible { box-shadow: 0 
 
 .original-visual {
   position: relative;
+  isolation: isolate;
   overflow: visible;
 }
-.original-visual:hover,
-.original-visual:focus-within { z-index: 30; }
 .matrix-visual { min-height: 536px; }
 .content-fit-visual { min-height: 0; }
 .original-chart-header { margin-bottom: 12px; }
@@ -497,9 +510,7 @@ button:focus-visible, select:focus-visible, input:focus-visible { box-shadow: 0 
 }
 .original-award-scroll { width: 100%; overflow: visible; }
 .original-award-axis {
-  position: sticky;
-  z-index: 10;
-  top: 0;
+  position: static;
   display: flex;
   align-items: center;
   padding: 8px 16px;
@@ -626,7 +637,7 @@ button:focus-visible, select:focus-visible, input:focus-visible { box-shadow: 0 
 }
 .original-heatmap .heatmap-name-column { width: 31%; }
 .original-heatmap .heatmap-score-column { width: 9.857%; }
-.original-heatmap thead { position: sticky; top: 0; z-index: 20; }
+.original-heatmap thead { position: static; }
 .original-heatmap th, .original-heatmap td { border-bottom: 1px solid var(--border); }
 .original-heatmap thead th { padding: 0; background: var(--surface); }
 .original-heatmap thead th > button {
@@ -648,9 +659,7 @@ button:focus-visible, select:focus-visible, input:focus-visible { box-shadow: 0 
 .original-heatmap thead th > button.active { color: var(--positive); }
 .original-heatmap thead th > button span { margin-left: 3px; }
 .original-heatmap .sticky-name {
-  position: sticky;
-  left: 0;
-  z-index: 12;
+  position: static;
   width: auto;
   min-width: 0;
   max-width: none;
@@ -658,7 +667,7 @@ button:focus-visible, select:focus-visible, input:focus-visible { box-shadow: 0 
   background: var(--surface);
   text-align: left;
 }
-.original-heatmap thead .sticky-name { z-index: 30; padding: 3px 12px 0; color: var(--muted); font-size: 9px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; }
+.original-heatmap thead .sticky-name { padding: 3px 12px 0; color: var(--muted); font-size: 9px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; }
 .original-heatmap tbody tr:hover .sticky-name, .original-heatmap tbody tr.selected .sticky-name { background: var(--soft); }
 .original-heatmap tbody tr.selected { outline: 2px solid var(--foreground); outline-offset: -2px; }
 .original-heatmap tbody .sticky-name > button { width: 100%; padding: 8px 12px; border: 0; background: transparent; text-align: left; cursor: pointer; }
