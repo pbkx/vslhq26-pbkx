@@ -1,6 +1,6 @@
 # GrantPilot
 
-GrantPilot turns a nonprofit’s mission and funding needs into an evidence-ranked grant and private-funder workbench inside Microsoft 365 Copilot.
+GrantPilot - A Microsoft 365 Copilot agent that turns a nonprofit’s mission and funding needs into an evidence-ranked grant and private-funder workbench.
 
 ## Team
 
